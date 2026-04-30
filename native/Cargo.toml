@@ -1,0 +1,25 @@
+[package]
+name = "audiolib-core"
+version = "0.1.0"
+edition = "2021"
+description = "Rust core for audiolib — high-performance audio analysis"
+license = "MIT"
+authors = ["Bruno Lima"]
+
+[lib]
+name = "audiolib_core"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+rustfft = "6"
+ndarray = "0.16"
+num-complex = "0.4"
+num-traits = "0.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true

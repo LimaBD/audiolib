@@ -1,0 +1,68 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "audiolib"
+version = "0.1.0"
+description = "Blazing-fast audio analysis and DSP for Python — powered by a Rust engine under the hood"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+authors = [
+    { name = "Bruno Lima", email = "contact@brunolima.dev" },
+]
+dependencies = [
+    "numpy>=1.21",
+    "soundfile>=0.12",
+]
+keywords = ["audio", "dsp", "music", "analysis", "rust", "performance", "librosa", "spectrogram", "mel"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "maturin>=1.5", "numpy>=1.21", "soundfile>=0.12"]
+
+[project.urls]
+Homepage = "https://github.com/LimaBD/audiolib"
+Repository = "https://github.com/LimaBD/audiolib"
+Documentation = "https://github.com/LimaBD/audiolib#readme"
+"Bug Tracker" = "https://github.com/LimaBD/audiolib/issues"
+Changelog = "https://github.com/LimaBD/audiolib/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+manifest-path = "native/Cargo.toml"
+# The compiled Rust extension is exposed as audiolib._core
+module-name = "audiolib._core"
+# Python source lives under src/
+python-source = "src"
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "B", "SIM", "I"]
+ignore = ["E501", "UP045"]

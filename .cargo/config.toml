@@ -1,0 +1,9 @@
+[build]
+# Use sparse registries for faster downloads
+[net]
+git-fetch-with-cli = true
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3

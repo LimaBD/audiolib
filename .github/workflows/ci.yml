@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------------------------------------------------
+  # 1. Rust checks (fast, no Python needed)
+  # -------------------------------------------------------------------------
+  rust-check:
+    name: Rust check & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('native/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: cargo fmt --check
+        working-directory: native
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        working-directory: native
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        working-directory: native
+        run: cargo test --release
+
+  # -------------------------------------------------------------------------
+  # 2. Python lint
+  # -------------------------------------------------------------------------
+  python-lint:
+    name: Python lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff
+        run: ruff check src/ tests/
+
+  # -------------------------------------------------------------------------
+  # 3. Build & test matrix
+  # -------------------------------------------------------------------------
+  python-tests:
+    name: Tests — Python ${{ matrix.python-version }} / ${{ matrix.os }}
+    needs: [rust-check, python-lint]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        exclude:
+          # Reduce CI time: skip redundant OS/version combos on non-Linux
+          - os: macos-latest
+            python-version: "3.8"
+          - os: macos-latest
+            python-version: "3.9"
+          - os: windows-latest
+            python-version: "3.8"
+          - os: windows-latest
+            python-version: "3.9"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: ${{ runner.os }}-cargo-${{ matrix.python-version }}-${{ hashFiles('native/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install maturin
+        run: pip install "maturin>=1.5,<2.0"
+
+      - name: Build & install audiolib (dev mode)
+        run: maturin develop --release
+
+      - name: Install test dependencies
+        run: pip install pytest pytest-cov numpy soundfile
+
+      - name: Run tests
+        run: pytest tests/ -v --ignore=tests/benchmark.py --cov=src/audiolib --cov-report=xml -x
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  # -------------------------------------------------------------------------
+  # 4. Benchmark (informational, Linux only)
+  # -------------------------------------------------------------------------
+  benchmarks:
+    name: Benchmarks (informational)
+    needs: python-tests
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('native/Cargo.lock') }}
+
+      - name: Install dependencies
+        run: |
+          pip install "maturin>=1.5,<2.0" numpy soundfile pytest-benchmark
+
+      - name: Build & install audiolib
+        run: maturin develop --release
+
+      - name: Run benchmarks
+        run: python tests/benchmark.py
