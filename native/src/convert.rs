@@ -77,11 +77,7 @@ pub fn midi_to_hz(notes: Vec<f64>) -> Vec<f64> {
 /// Convert frame indices to audio sample indices
 #[pyfunction]
 #[pyo3(signature = (frames, hop_length=512, n_fft=None))]
-pub fn frames_to_samples(
-    frames: Vec<i64>,
-    hop_length: i64,
-    n_fft: Option<i64>,
-) -> Vec<i64> {
+pub fn frames_to_samples(frames: Vec<i64>, hop_length: i64, n_fft: Option<i64>) -> Vec<i64> {
     let offset = n_fft.map(|n| n / 2).unwrap_or(0);
     frames.iter().map(|&f| f * hop_length + offset).collect()
 }
@@ -89,12 +85,7 @@ pub fn frames_to_samples(
 /// Convert frame counts to time in seconds
 #[pyfunction]
 #[pyo3(signature = (frames, sr=22050.0, hop_length=512, n_fft=None))]
-pub fn frames_to_time(
-    frames: Vec<i64>,
-    sr: f64,
-    hop_length: i64,
-    n_fft: Option<i64>,
-) -> Vec<f64> {
+pub fn frames_to_time(frames: Vec<i64>, sr: f64, hop_length: i64, n_fft: Option<i64>) -> Vec<f64> {
     let samples = frames_to_samples(frames, hop_length, n_fft);
     samples.iter().map(|&s| s as f64 / sr).collect()
 }
@@ -102,16 +93,9 @@ pub fn frames_to_time(
 /// Convert sample indices to STFT frames
 #[pyfunction]
 #[pyo3(signature = (samples, hop_length=512, n_fft=None))]
-pub fn samples_to_frames(
-    samples: Vec<i64>,
-    hop_length: i64,
-    n_fft: Option<i64>,
-) -> Vec<i64> {
+pub fn samples_to_frames(samples: Vec<i64>, hop_length: i64, n_fft: Option<i64>) -> Vec<i64> {
     let offset = n_fft.map(|n| n / 2).unwrap_or(0);
-    samples
-        .iter()
-        .map(|&s| (s - offset) / hop_length)
-        .collect()
+    samples.iter().map(|&s| (s - offset) / hop_length).collect()
 }
 
 /// Convert sample indices to time in seconds
@@ -124,12 +108,7 @@ pub fn samples_to_time(samples: Vec<i64>, sr: f64) -> Vec<f64> {
 /// Convert timestamps (seconds) to STFT frames
 #[pyfunction]
 #[pyo3(signature = (times, sr=22050.0, hop_length=512, n_fft=None))]
-pub fn time_to_frames(
-    times: Vec<f64>,
-    sr: f64,
-    hop_length: i64,
-    n_fft: Option<i64>,
-) -> Vec<i64> {
+pub fn time_to_frames(times: Vec<f64>, sr: f64, hop_length: i64, n_fft: Option<i64>) -> Vec<i64> {
     let samples: Vec<i64> = times.iter().map(|&t| (t * sr).round() as i64).collect();
     samples_to_frames(samples, hop_length, n_fft)
 }

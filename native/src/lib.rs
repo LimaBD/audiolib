@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
-mod dsp;
 mod convert;
+mod dsp;
 
 // ─── Module entry point ───────────────────────────────────────────────────────
 

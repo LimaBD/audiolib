@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use rustfft::{FftPlanner, num_complex::Complex};
+use rustfft::{num_complex::Complex, FftPlanner};
 use std::f32::consts::PI;
 use std::f64::consts::PI as PI64;
 
@@ -160,7 +160,10 @@ pub fn istft(
 
         // Mirror for real-valued IFFT
         for k in 1..(n_fft - n_bins + 1) {
-            let mirror = Complex::new(stft_re[base + n_bins - 1 - k], -stft_im[base + n_bins - 1 - k]);
+            let mirror = Complex::new(
+                stft_re[base + n_bins - 1 - k],
+                -stft_im[base + n_bins - 1 - k],
+            );
             buf.push(mirror);
         }
         buf.resize(n_fft, Complex::new(0.0, 0.0));
@@ -200,12 +203,7 @@ pub fn istft(
 /// Convert amplitude spectrogram to dB
 #[pyfunction]
 #[pyo3(signature = (s, ref_val=1.0, amin=1e-5, top_db=None))]
-pub fn amplitude_to_db(
-    s: Vec<f32>,
-    ref_val: f32,
-    amin: f32,
-    top_db: Option<f32>,
-) -> Vec<f32> {
+pub fn amplitude_to_db(s: Vec<f32>, ref_val: f32, amin: f32, top_db: Option<f32>) -> Vec<f32> {
     let ref_db = 20.0 * ref_val.abs().log10();
     let mut out: Vec<f32> = s
         .iter()
@@ -229,12 +227,7 @@ pub fn amplitude_to_db(
 /// Convert power spectrogram to dB
 #[pyfunction]
 #[pyo3(signature = (s, ref_val=1.0, amin=1e-10, top_db=None))]
-pub fn power_to_db(
-    s: Vec<f32>,
-    ref_val: f32,
-    amin: f32,
-    top_db: Option<f32>,
-) -> Vec<f32> {
+pub fn power_to_db(s: Vec<f32>, ref_val: f32, amin: f32, top_db: Option<f32>) -> Vec<f32> {
     let ref_db = 10.0 * ref_val.abs().log10();
     let mut out: Vec<f32> = s
         .iter()
@@ -285,7 +278,11 @@ pub fn zero_crossings(y: Vec<f32>, threshold: f32, pad: bool) -> Vec<bool> {
     }
     let mut zc = vec![false; n];
     for i in 1..n {
-        let a = if y[i - 1].abs() <= threshold { 0.0 } else { y[i - 1] };
+        let a = if y[i - 1].abs() <= threshold {
+            0.0
+        } else {
+            y[i - 1]
+        };
         let b = if y[i].abs() <= threshold { 0.0 } else { y[i] };
         zc[i] = a.signum() != b.signum();
     }
@@ -447,10 +444,7 @@ pub fn get_rms(y: Vec<f32>, frame_length: usize, hop_length: usize) -> Vec<f32> 
     (0..n_frames)
         .map(|i| {
             let start = i * hop_length;
-            let sum_sq: f32 = y[start..start + frame_length]
-                .iter()
-                .map(|&v| v * v)
-                .sum();
+            let sum_sq: f32 = y[start..start + frame_length].iter().map(|&v| v * v).sum();
             (sum_sq * inv).sqrt()
         })
         .collect()
@@ -516,9 +510,7 @@ pub fn mel_filterbank(
         .collect();
 
     // FFT frequencies in Hz
-    let fft_freqs: Vec<f32> = (0..n_bins)
-        .map(|k| k as f32 * sr / n_fft as f32)
-        .collect();
+    let fft_freqs: Vec<f32> = (0..n_bins).map(|k| k as f32 * sr / n_fft as f32).collect();
 
     let mut weights = vec![0.0f32; n_mels * n_bins];
 
@@ -576,12 +568,7 @@ pub fn melspectrogram(
 /// n_mfcc: number of coefficients to return
 /// Returns flat f32, shape (n_mfcc, n_frames)
 #[pyfunction]
-pub fn mfcc(
-    log_mel: Vec<f32>,
-    n_mels: usize,
-    n_frames: usize,
-    n_mfcc: usize,
-) -> Vec<f32> {
+pub fn mfcc(log_mel: Vec<f32>, n_mels: usize, n_frames: usize, n_mfcc: usize) -> Vec<f32> {
     let n_mfcc = n_mfcc.min(n_mels);
     let mut out = vec![0.0f32; n_mfcc * n_frames];
     // DCT-II: c[k,t] = sum_{m=0}^{n_mels-1} log_mel[m,t] * cos(pi*k*(m+0.5)/n_mels)
@@ -620,7 +607,8 @@ pub fn chroma_stft(
     for k in 1..n_bins {
         let freq = k as f32 * sr / n_fft as f32;
         let midi_float = 12.0 * (freq / a4).log2() + 69.0;
-        let chroma_idx = ((midi_float.round() as i64 % n_chroma as i64 + n_chroma as i64) as usize) % n_chroma;
+        let chroma_idx =
+            ((midi_float.round() as i64 % n_chroma as i64 + n_chroma as i64) as usize) % n_chroma;
         for t in 0..n_frames {
             out[chroma_idx * n_frames + t] += stft_mag[t * n_bins + k];
         }
@@ -727,11 +715,7 @@ pub fn spectral_rolloff(
 
 /// Spectral flatness
 #[pyfunction]
-pub fn spectral_flatness(
-    stft_mag: Vec<f32>,
-    n_frames: usize,
-    n_bins: usize,
-) -> Vec<f32> {
+pub fn spectral_flatness(stft_mag: Vec<f32>, n_frames: usize, n_bins: usize) -> Vec<f32> {
     (0..n_frames)
         .map(|t| {
             let frame = &stft_mag[t * n_bins..(t + 1) * n_bins];
@@ -753,11 +737,7 @@ pub fn spectral_flatness(
 
 /// Simple onset strength (spectral flux)
 #[pyfunction]
-pub fn onset_strength(
-    stft_mag: Vec<f32>,
-    n_frames: usize,
-    n_bins: usize,
-) -> Vec<f32> {
+pub fn onset_strength(stft_mag: Vec<f32>, n_frames: usize, n_bins: usize) -> Vec<f32> {
     if n_frames == 0 {
         return vec![];
     }
