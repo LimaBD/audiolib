@@ -346,11 +346,13 @@ class TestTone:
 
 class TestChirp:
     def test_output_length(self, sr):
+        pytest.importorskip("scipy")
         from audiolib.core import chirp
         y = chirp(fmin=220.0, fmax=880.0, sr=sr, duration=1.0)
         assert len(y) == sr
 
     def test_output_dtype(self, sr):
+        pytest.importorskip("scipy")
         from audiolib.core import chirp
         y = chirp(fmin=220.0, fmax=880.0, sr=sr, duration=1.0)
         assert y.dtype == np.float32
