@@ -100,9 +100,9 @@ pub fn stft(
 
         fft.process(&mut buf);
 
-        for k in 0..n_bins {
-            out.push(buf[k].re);
-            out.push(buf[k].im);
+        for item in buf.iter().take(n_bins) {
+            out.push(item.re);
+            out.push(item.im);
         }
     }
 
@@ -272,6 +272,7 @@ pub fn db_to_power(s_db: Vec<f32>, ref_val: f32) -> Vec<f32> {
 #[pyfunction]
 #[pyo3(signature = (y, threshold=1e-10, pad=true))]
 pub fn zero_crossings(y: Vec<f32>, threshold: f32, pad: bool) -> Vec<bool> {
+    let _ = pad;
     let n = y.len();
     if n == 0 {
         return vec![];
@@ -379,6 +380,7 @@ pub fn mu_expand(x: Vec<f32>, mu: f32, quantize: bool) -> PyResult<Vec<f32>> {
 /// Actually we expect channel-first: first n_samples for ch0, next for ch1...
 /// n_channels: number of channels
 #[pyfunction]
+#[allow(unknown_lints, clippy::manual_is_multiple_of)]
 pub fn to_mono(y_flat: Vec<f32>, n_channels: usize) -> PyResult<Vec<f32>> {
     if n_channels == 0 {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
