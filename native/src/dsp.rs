@@ -952,13 +952,6 @@ pub fn phase_vocoder(
                 im_out[out_t * n_bins + k] = mag * ph.sin();
             }
         }
-        if out_t == 0 {
-            // Copy the accumulated first-frame output
-            for k in 0..n_bins {
-                re_out[k] = re_out[k]; // already written above
-                im_out[k] = im_out[k];
-            }
-        }
     }
 
     Ok((re_out, im_out, n_frames_out))
@@ -1007,12 +1000,23 @@ pub fn griffinlim(
     let ifft = planner.plan_fft_inverse(n_fft);
     let fft = planner.plan_fft_forward(n_fft);
 
-    let mut signal = vec![0.0f32; if n_frames == 0 { 0 } else { (n_frames - 1) * hop_length + n_fft }];
+    let mut signal = vec![
+        0.0f32;
+        if n_frames == 0 {
+            0
+        } else {
+            (n_frames - 1) * hop_length + n_fft
+        }
+    ];
 
     for _iter in 0..n_iter {
         // Build complex STFT from magnitude + current phase
         // ISTFT → signal
-        let n_sig = if n_frames == 0 { 0 } else { (n_frames - 1) * hop_length + n_fft };
+        let n_sig = if n_frames == 0 {
+            0
+        } else {
+            (n_frames - 1) * hop_length + n_fft
+        };
         signal = vec![0.0f32; n_sig];
         let mut win_sum = vec![0.0f32; n_sig];
 
@@ -1027,10 +1031,7 @@ pub fn griffinlim(
 
             // Mirror for real-valued IFFT
             for k in 1..(n_fft - n_bins + 1) {
-                let mirror = Complex::new(
-                    buf[n_bins - 1 - k].re,
-                    -buf[n_bins - 1 - k].im,
-                );
+                let mirror = Complex::new(buf[n_bins - 1 - k].re, -buf[n_bins - 1 - k].im);
                 buf.push(mirror);
             }
             buf.resize(n_fft, Complex::new(0.0, 0.0));
@@ -1103,6 +1104,7 @@ pub fn griffinlim(
 /// Returns flat Vec<f32>, shape (n_bands+1, n_frames), row-major.
 #[pyfunction]
 #[pyo3(signature = (stft_mag, sr, n_fft, n_frames, n_bins, n_bands=6, fmin=200.0, quantile=0.02, linear=false))]
+#[allow(clippy::too_many_arguments)]
 pub fn spectral_contrast(
     stft_mag: Vec<f32>,
     sr: f32,
@@ -1138,7 +1140,13 @@ pub fn spectral_contrast(
                 .iter()
                 .enumerate()
                 .filter(|(_, &f)| f >= flo && f < fhi)
-                .map(|(k, _)| if linear { frame[k] } else { (frame[k] as f64 + 1e-10).ln() as f32 })
+                .map(|(k, _)| {
+                    if linear {
+                        frame[k]
+                    } else {
+                        (frame[k] as f64 + 1e-10).ln() as f32
+                    }
+                })
                 .collect();
 
             if band_mags.is_empty() {
@@ -1177,7 +1185,9 @@ pub fn poly_features(
     n_bins: usize,
     order: usize,
 ) -> Vec<f32> {
-    let fft_freqs: Vec<f64> = (0..n_bins).map(|k| k as f64 * sr as f64 / n_fft as f64).collect();
+    let fft_freqs: Vec<f64> = (0..n_bins)
+        .map(|k| k as f64 * sr as f64 / n_fft as f64)
+        .collect();
     let n_coeffs = order + 1;
     let mut out = vec![0.0f32; n_coeffs * n_frames];
 
@@ -1189,11 +1199,10 @@ pub fn poly_features(
 
     // Precompute powers of frequencies
     let mut freq_pows: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
-    for i in 0..n {
-        let f = fft_freqs[i];
+    for (i, f) in fft_freqs.iter().copied().enumerate().take(n) {
         let mut p = 1.0f64;
-        for j in 0..m {
-            freq_pows[j][i] = p;
+        for row in freq_pows.iter_mut().take(m) {
+            row[i] = p;
             p *= f;
         }
     }
@@ -1315,7 +1324,9 @@ pub fn delta(
             for t in 0..n_frames as isize {
                 let mut acc = 0.0f32;
                 for offset in -half..=half {
-                    if offset == 0 { continue; }
+                    if offset == 0 {
+                        continue;
+                    }
                     let idx = (t + offset).max(0).min(n_frames as isize - 1) as usize;
                     acc += offset as f32 * input[feat * n_frames + idx];
                 }
@@ -1453,10 +1464,7 @@ pub fn beat_tempo(
     let fft = planner.plan_fft_forward(fft_size);
     let ifft = planner.plan_fft_inverse(fft_size);
 
-    let mut buf: Vec<Complex<f32>> = onset_env
-        .iter()
-        .map(|&x| Complex::new(x, 0.0))
-        .collect();
+    let mut buf: Vec<Complex<f32>> = onset_env.iter().map(|&x| Complex::new(x, 0.0)).collect();
     buf.resize(fft_size, Complex::new(0.0, 0.0));
     fft.process(&mut buf);
     buf.iter_mut().for_each(|c| {
@@ -1534,19 +1542,27 @@ pub fn beat_track_dp(
 
     for t in 1..n {
         // Look back in range [beat_period/2, 2*beat_period]
-        let lo = if t > beat_period * 2 { t - beat_period * 2 } else { 0 };
-        let hi = if t > beat_period / 2 { t - beat_period / 2 } else { 0 };
+        let lo = if t > beat_period * 2 {
+            t - beat_period * 2
+        } else {
+            0
+        };
+        let hi = if t > beat_period / 2 {
+            t - beat_period / 2
+        } else {
+            0
+        };
 
         let mut best_score = f32::NEG_INFINITY;
         let mut best_prev = lo as i32;
 
-        for prev in lo..=hi {
-            if score[prev] == f32::NEG_INFINITY {
+        for (prev, prev_score) in score.iter().enumerate().take(hi + 1).skip(lo) {
+            if *prev_score == f32::NEG_INFINITY {
                 continue;
             }
             let delta = t as f32 - prev as f32;
             let penalty = -tightness * (((delta / beat_period as f32).ln()).powi(2));
-            let s = score[prev] + penalty;
+            let s = *prev_score + penalty;
             if s > best_score {
                 best_score = s;
                 best_prev = prev as i32;
@@ -1560,9 +1576,9 @@ pub fn beat_track_dp(
     // Find the best final beat
     let mut best_t = 0;
     let mut best_s = f32::NEG_INFINITY;
-    for t in 0..n {
-        if score[t] > best_s {
-            best_s = score[t];
+    for (t, s) in score.iter().copied().enumerate().take(n) {
+        if s > best_s {
+            best_s = s;
             best_t = t;
         }
     }
@@ -1588,7 +1604,7 @@ pub fn beat_track_dp(
                 .iter()
                 .map(|&b| {
                     let b = b as usize;
-                    let lo = if b > smooth_len { b - smooth_len } else { 0 };
+                    let lo = b.saturating_sub(smooth_len);
                     let hi = (b + smooth_len).min(n - 1);
                     odf[lo..=hi].iter().cloned().fold(0.0f32, f32::max)
                 })
@@ -1655,7 +1671,11 @@ pub fn onset_detect(
     let mean_window = (wait * 2).min(n);
     let local_mean: Vec<f32> = (0..n)
         .map(|i| {
-            let lo = if i > mean_window / 2 { i - mean_window / 2 } else { 0 };
+            let lo = if i > mean_window / 2 {
+                i - mean_window / 2
+            } else {
+                0
+            };
             let hi = (i + mean_window / 2).min(n - 1);
             odf[lo..=hi].iter().sum::<f32>() / (hi - lo + 1) as f32
         })
@@ -1666,10 +1686,7 @@ pub fn onset_detect(
 
     for i in 1..(n - 1) {
         // Peak picking: local maximum above threshold
-        if odf[i] > odf[i - 1]
-            && odf[i] >= odf[i + 1]
-            && odf[i] > local_mean[i] + delta
-        {
+        if odf[i] > odf[i - 1] && odf[i] >= odf[i + 1] && odf[i] > local_mean[i] + delta {
             if let Some(last) = last_onset {
                 if i - last >= wait {
                     onsets.push(i as u32);

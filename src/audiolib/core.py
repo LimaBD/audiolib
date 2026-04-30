@@ -12,7 +12,14 @@ import os
 from typing import BinaryIO
 
 import numpy as np
-import soundfile as sf
+
+try:
+    import soundfile as sf
+except Exception as exc:
+    sf = None
+    _SOUNDFILE_IMPORT_ERROR = exc
+else:
+    _SOUNDFILE_IMPORT_ERROR = None
 
 from audiolib._core import (
     amplitude_to_db as _amp_to_db,
@@ -27,6 +34,9 @@ from audiolib._core import (
     db_to_power as _db_to_pow,
 )
 from audiolib._core import (
+    griffinlim as _griffinlim_rust,
+)
+from audiolib._core import (
     istft as _istft_rust,
 )
 from audiolib._core import (
@@ -34,6 +44,9 @@ from audiolib._core import (
 )
 from audiolib._core import (
     mu_expand as _mu_expand,
+)
+from audiolib._core import (
+    phase_vocoder as _phase_vocoder_rust,
 )
 from audiolib._core import (
     power_to_db as _pow_to_db,
@@ -49,12 +62,6 @@ from audiolib._core import (
 )
 from audiolib._core import (
     zero_crossings as _zero_crossings,
-)
-from audiolib._core import (
-    phase_vocoder as _phase_vocoder_rust,
-)
-from audiolib._core import (
-    griffinlim as _griffinlim_rust,
 )
 from audiolib.exceptions import ParameterError
 
@@ -81,6 +88,17 @@ __all__ = [
     "phase_vocoder",
     "griffinlim",
 ]
+
+
+def _require_soundfile():
+    """Return soundfile module or raise a helpful import error."""
+    if sf is None:
+        raise ImportError(
+            "soundfile is required for file-based audio I/O. "
+            "Install soundfile and ensure Python includes ctypes/_ctypes support."
+        ) from _SOUNDFILE_IMPORT_ERROR
+    return sf
+
 
 # ─── Audio loading ────────────────────────────────────────────────────────────
 
@@ -123,7 +141,8 @@ def load(
     sr : int
         Sampling rate.
     """
-    with sf.SoundFile(path) as f:
+    soundfile = _require_soundfile()
+    with soundfile.SoundFile(path) as f:
         sr_native = f.samplerate
 
         if offset > 0.0:
@@ -161,7 +180,8 @@ def get_duration(
     API-compatible with ``librosa.get_duration``.
     """
     if path is not None:
-        return float(sf.info(path).duration)
+        soundfile = _require_soundfile()
+        return float(soundfile.info(path).duration)
 
     if y is not None:
         return float(y.shape[-1]) / sr
@@ -181,7 +201,8 @@ def get_samplerate(path: str | int | BinaryIO) -> float:
 
     API-compatible with ``librosa.get_samplerate``.
     """
-    return float(sf.info(path).samplerate)
+    soundfile = _require_soundfile()
+    return float(soundfile.info(path).samplerate)
 
 
 def to_mono(y: np.ndarray) -> np.ndarray:

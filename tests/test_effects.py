@@ -6,8 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from tests.conftest import HOP_LENGTH, N_FFT, N_SAMPLES, SR
-
+from tests.conftest import N_FFT
 
 # ---------------------------------------------------------------------------
 # time_stretch
@@ -43,9 +42,10 @@ class TestTimeStretch:
 
     def test_bad_rate_raises(self, sine_440):
         from audiolib.effects import time_stretch
-        with pytest.raises(Exception):
+        from audiolib.exceptions import ParameterError
+        with pytest.raises(ParameterError):
             time_stretch(sine_440, rate=0.0)
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             time_stretch(sine_440, rate=-1.0)
 
     def test_custom_n_fft(self, sine_440):

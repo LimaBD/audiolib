@@ -13,6 +13,9 @@ from audiolib._core import (
     chroma_stft as _chroma_stft,
 )
 from audiolib._core import (
+    delta as _delta,
+)
+from audiolib._core import (
     get_rms as _get_rms,
 )
 from audiolib._core import (
@@ -28,25 +31,22 @@ from audiolib._core import (
     onset_strength as _onset_strength,
 )
 from audiolib._core import (
+    poly_features as _poly_features,
+)
+from audiolib._core import (
     spectral_bandwidth as _spectral_bandwidth,
 )
 from audiolib._core import (
     spectral_centroid as _spectral_centroid,
 )
 from audiolib._core import (
+    spectral_contrast as _spectral_contrast,
+)
+from audiolib._core import (
     spectral_flatness as _spectral_flatness,
 )
 from audiolib._core import (
     spectral_rolloff as _spectral_rolloff,
-)
-from audiolib._core import (
-    delta as _delta,
-)
-from audiolib._core import (
-    spectral_contrast as _spectral_contrast,
-)
-from audiolib._core import (
-    poly_features as _poly_features,
 )
 from audiolib._core import (
     tempogram as _tempogram,
@@ -664,8 +664,6 @@ def tonnetz(
     # Transformation matrix: maps 12 chroma bins to 6 tonal centroid dims
     # Rows: fifths-x, fifths-y, minor-x, minor-y, major-x, major-y
     pitch_class = np.arange(12, dtype=np.float32)
-    r = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-
     # Angles for each transformation (in radians)
     angles = np.array(
         [

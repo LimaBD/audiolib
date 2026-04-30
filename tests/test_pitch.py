@@ -6,9 +6,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from tests.conftest import HOP_LENGTH, N_FFT, SR
-
-
 # ---------------------------------------------------------------------------
 # yin
 # ---------------------------------------------------------------------------
@@ -62,12 +59,14 @@ class TestYIN:
 
     def test_bad_fmin_raises(self, sine_440, sr):
         from audiolib import pitch
-        with pytest.raises(Exception):
+        from audiolib.exceptions import ParameterError
+        with pytest.raises(ParameterError):
             pitch.yin(sine_440, fmin=0.0, fmax=2000.0, sr=sr)
 
     def test_fmin_greater_fmax_raises(self, sine_440, sr):
         from audiolib import pitch
-        with pytest.raises(Exception):
+        from audiolib.exceptions import ParameterError
+        with pytest.raises(ParameterError):
             pitch.yin(sine_440, fmin=1000.0, fmax=500.0, sr=sr)
 
     def test_frame_length_param(self, sine_440, sr):

@@ -6,12 +6,14 @@ The hot path runs in Rust via _core.
 """
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 
 from audiolib._core import (
     beat_tempo as _beat_tempo,
+)
+from audiolib._core import (
     beat_track_dp as _beat_track_dp,
 )
 

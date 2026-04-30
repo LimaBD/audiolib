@@ -4,10 +4,8 @@ Tests for audiolib.beat — beat tracking and tempo estimation.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
-from tests.conftest import HOP_LENGTH, SR
-
+from tests.conftest import HOP_LENGTH
 
 # ---------------------------------------------------------------------------
 # tempo

@@ -121,7 +121,8 @@ def onset_strength_multi(
     onset_envelope : np.ndarray [shape=(n_channels, n_frames)]
     """
     from audiolib.core import stft
-    from audiolib.feature import melspectrogram, onset_strength as _feat_onset
+    from audiolib.feature import melspectrogram
+    from audiolib.feature import onset_strength as _feat_onset
 
     if S is None:
         if y is None:

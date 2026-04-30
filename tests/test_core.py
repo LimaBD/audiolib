@@ -8,9 +8,16 @@ import tempfile
 
 import numpy as np
 import pytest
-import soundfile as sf
 
 from tests.conftest import HOP_LENGTH, N_FFT, N_SAMPLES
+
+
+def _soundfile():
+    return pytest.importorskip(
+        "soundfile",
+        reason="soundfile (and Python ctypes/_ctypes support) is required for file I/O tests",
+    )
+
 
 # ---------------------------------------------------------------------------
 # to_mono
@@ -76,6 +83,7 @@ class TestGetDuration:
 
     def test_from_file(self, sine_440, sr):
         from audiolib.core import get_duration
+        sf = _soundfile()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             path = f.name
         try:
@@ -94,6 +102,7 @@ class TestGetDuration:
 class TestGetSamplerate:
     def test_reads_samplerate(self, sine_440, sr):
         from audiolib.core import get_samplerate
+        sf = _soundfile()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             path = f.name
         try:
@@ -109,6 +118,7 @@ class TestGetSamplerate:
 
 class TestLoad:
     def _write_wav(self, y, sr):
+        sf = _soundfile()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             sf.write(f.name, y, sr)
         return f.name

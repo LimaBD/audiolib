@@ -6,9 +6,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from tests.conftest import HOP_LENGTH, N_FFT, N_SAMPLES
-
-
 # ---------------------------------------------------------------------------
 # valid_audio
 # ---------------------------------------------------------------------------
@@ -23,38 +20,44 @@ class TestValidAudio:
         assert valid_audio(sine_440, mono=True) is True
 
     def test_stereo_rejected_when_mono_required(self, stereo_sine):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import valid_audio
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             valid_audio(stereo_sine, mono=True)
 
     def test_not_ndarray_raises(self):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import valid_audio
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             valid_audio([1.0, 2.0, 3.0])
 
     def test_integer_dtype_raises(self, sr):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import valid_audio
         y = np.zeros(sr, dtype=np.int16)
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             valid_audio(y)
 
     def test_zero_dim_raises(self):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import valid_audio
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             valid_audio(np.float32(0.0))
 
     def test_nan_raises(self, sr):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import valid_audio
         y = np.zeros(sr, dtype=np.float32)
         y[100] = np.nan
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             valid_audio(y)
 
     def test_inf_raises(self, sr):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import valid_audio
         y = np.zeros(sr, dtype=np.float32)
         y[100] = np.inf
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             valid_audio(y)
 
 
@@ -83,19 +86,22 @@ class TestFrame:
         assert f.shape[0] == 1
 
     def test_signal_too_short_raises(self):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import frame
         x = np.ones(10, dtype=np.float32)
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             frame(x, frame_length=20, hop_length=5)
 
     def test_bad_frame_length_raises(self, sine_440):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import frame
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             frame(sine_440, frame_length=0, hop_length=512)
 
     def test_bad_hop_length_raises(self, sine_440):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import frame
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             frame(sine_440, frame_length=2048, hop_length=0)
 
     def test_first_frame_content(self, sine_440):
@@ -140,9 +146,10 @@ class TestPadCenter:
         np.testing.assert_array_equal(out, x)
 
     def test_smaller_size_raises(self):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import pad_center
         x = np.ones(10, dtype=np.float32)
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             pad_center(x, size=5)
 
     def test_2d_array_axis(self):
@@ -299,10 +306,11 @@ class TestSoftmask:
         assert mask.shape == X.shape
 
     def test_shape_mismatch_raises(self):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import softmask
         X = np.ones((4, 6), dtype=np.float32)
         X_ref = np.ones((4, 5), dtype=np.float32)
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             softmask(X, X_ref)
 
     def test_power_inf(self):
@@ -315,9 +323,10 @@ class TestSoftmask:
         assert mask[0, 1] == 0.0
 
     def test_bad_power_raises(self):
+        from audiolib.exceptions import ParameterError
         from audiolib.util import softmask
         X = np.ones((3, 3), dtype=np.float32)
-        with pytest.raises(Exception):
+        with pytest.raises(ParameterError):
             softmask(X, X, power=0.0)
 
 
