@@ -48,13 +48,13 @@ No Rust compiler required for your team or CI. Prebuilt binaries for Linux, macO
 
 ## What's inside
 
-| Module | What it does |
-|---|---|
-| `audiolib.core` | Audio I/O, STFT/ISTFT, magnitude scaling, zero crossings, μ-law companding, signal generators |
+| Module               | What it does                                                                                       |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `audiolib.core`    | Audio I/O, STFT/ISTFT, magnitude scaling, zero crossings, μ-law companding, signal generators     |
 | `audiolib.feature` | Mel spectrograms, MFCCs, chroma, spectral centroid/bandwidth/rolloff/flatness, RMS, onset strength |
-| `audiolib.convert` | Hz ↔ mel ↔ MIDI ↔ note name; frames ↔ samples ↔ time — all vectorized |
-| `audiolib.effects` | Time stretching, pitch shifting, harmonic/percussive separation, silence trimming |
-| `audiolib.util` | Framing, padding, normalization, masking and other signal utilities |
+| `audiolib.convert` | Hz ↔ mel ↔ MIDI ↔ note name; frames ↔ samples ↔ time — all vectorized                        |
+| `audiolib.effects` | Time stretching, pitch shifting, harmonic/percussive separation, silence trimming                  |
+| `audiolib.util`    | Framing, padding, normalization, masking and other signal utilities                                |
 
 ---
 
@@ -159,7 +159,7 @@ The Python layer handles NumPy array marshalling and keyword-argument ergonomics
 
 Full documentation lives in the [`docs/`](docs/) directory:
 
-- [Overview & motivation](docs/index.md)
+- [Overview &amp; motivation](docs/index.md)
 - [Getting started](docs/getting-started.md)
 - [API reference](docs/api-reference.md)
 - [Performance guide](docs/performance.md)

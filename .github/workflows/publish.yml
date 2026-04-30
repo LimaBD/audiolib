@@ -65,22 +65,16 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
-          args: >
-            --release
-            --out dist
-            --interpreter 3.8 3.9 3.10 3.11 3.12 3.13
-          sccache: true
+          args: --release --out dist --locked
+          sccache: "true"
 
       - name: Build wheels (macOS / Windows)
         if: runner.os != 'Linux'
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: >
-            --release
-            --out dist
-            --interpreter 3.8 3.9 3.10 3.11 3.12 3.13
-          sccache: true
+          args: --release --out dist --locked
+          sccache: "true"
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
@@ -153,18 +147,17 @@ jobs:
         run: pytest tests/ -v --ignore=tests/benchmark.py --ignore=tests/test_compat.py -x
 
   # -------------------------------------------------------------------------
-  # 4. Publish to TestPyPI
+  # 4. Publish to TestPyPI or PyPI
   # -------------------------------------------------------------------------
-  publish-testpypi:
-    name: Publish to TestPyPI
+  publish:
+    name: Publish to ${{ github.event.inputs.target || 'pypi' }}
     needs: test-wheels
     runs-on: ubuntu-latest
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'testpypi') ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && contains(github.ref, 'rc'))
     environment:
-      name: testpypi
-      url: https://test.pypi.org/p/audiolib
+      name: ${{ github.event.inputs.target == 'testpypi' && 'testpypi' || 'pypi' }}
+      url: ${{ github.event.inputs.target == 'testpypi' && 'https://test.pypi.org/p/audiolib' || 'https://pypi.org/p/audiolib' }}
+    permissions:
+      id-token: write  # OIDC trusted publishing — no stored secret needed
 
     steps:
       - name: Download all artifacts
@@ -181,47 +174,24 @@ jobs:
           path: dist/
 
       - name: Publish to TestPyPI
+        if: github.event.inputs.target == 'testpypi'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-
-  # -------------------------------------------------------------------------
-  # 5. Publish to PyPI
-  # -------------------------------------------------------------------------
-  publish-pypi:
-    name: Publish to PyPI
-    needs: test-wheels
-    runs-on: ubuntu-latest
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'pypi') ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, 'rc'))
-    environment:
-      name: pypi
-      url: https://pypi.org/p/audiolib
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: dist/
-          merge-multiple: true
-
-      - name: Download sdist
-        uses: actions/download-artifact@v4
-        with:
-          name: sdist
-          path: dist/
+          packages-dir: dist/
 
       - name: Publish to PyPI
+        if: github.event.inputs.target != 'testpypi'
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
 
   # -------------------------------------------------------------------------
-  # 6. Create GitHub release
+  # 5. Create GitHub release
   # -------------------------------------------------------------------------
   github-release:
     name: GitHub Release
-    needs: publish-pypi
+    needs: publish
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
 

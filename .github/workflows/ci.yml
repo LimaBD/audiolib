@@ -116,11 +116,14 @@ jobs:
       - name: Install maturin
         run: pip install "maturin>=1.5,<2.0"
 
-      - name: Build & install audiolib (dev mode)
-        run: maturin develop --release
+      - name: Build audiolib wheel
+        run: maturin build --release --out dist
 
       - name: Install test dependencies
         run: pip install pytest pytest-cov numpy soundfile
+
+      - name: Install audiolib wheel
+        run: pip install --no-index --find-links dist/ audiolib
 
       - name: Run tests
         run: pytest tests/ -v --ignore=tests/benchmark.py --cov=src/audiolib --cov-report=xml -x
@@ -164,8 +167,11 @@ jobs:
         run: |
           pip install "maturin>=1.5,<2.0" numpy soundfile pytest-benchmark
 
-      - name: Build & install audiolib
-        run: maturin develop --release
+      - name: Build audiolib wheel
+        run: maturin build --release --out dist
+
+      - name: Install audiolib wheel
+        run: pip install --no-index --find-links dist/ audiolib
 
       - name: Run benchmarks
         run: python tests/benchmark.py
