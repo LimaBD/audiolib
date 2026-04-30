@@ -5,7 +5,7 @@ API-compatible with librosa.util.
 """
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 
@@ -230,7 +230,7 @@ def axis_sort(
     axis: int = -1,
     index: bool = False,
     value=None,
-) -> Union[np.ndarray, tuple]:
+) -> np.ndarray | tuple:
     """Sort an array along a given axis.
 
     API-compatible with ``librosa.util.axis_sort``.
@@ -241,10 +241,7 @@ def axis_sort(
     bin_idx = value(S, axis=axis)
     idx = np.argsort(bin_idx)
 
-    if axis == -1 or axis == S.ndim - 1:
-        S_sorted = S[:, idx]
-    else:
-        S_sorted = S[idx]
+    S_sorted = S[:, idx] if axis == -1 or axis == S.ndim - 1 else S[idx]
 
     if index:
         return S_sorted, idx
@@ -268,7 +265,7 @@ def softmask(
         raise ParameterError("power must be positive")
 
     if np.isinf(power):
-        mask = X >= X_ref
+        mask = X_ref <= X
     else:
         Xp = X ** power
         Rp = X_ref ** power
@@ -303,7 +300,7 @@ def sparsify_rows(
     *,
     quantile: float = 0.01,
     dtype=None,
-) -> "scipy.sparse.csr_matrix":  # type: ignore[name-defined]
+) -> scipy.sparse.csr_matrix:  # type: ignore[name-defined]  # noqa: F821
     """Return a sparse row-matrix where values below a threshold are zeroed.
 
     API-compatible with ``librosa.util.sparsify_rows``.

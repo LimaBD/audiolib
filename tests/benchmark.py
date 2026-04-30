@@ -10,7 +10,6 @@ Or via pytest-benchmark:
 from __future__ import annotations
 
 import time
-import sys
 from typing import Callable
 
 import numpy as np
@@ -52,12 +51,14 @@ def print_row(label: str, lx_ms: float, lr_ms: float | None) -> None:
 
 def bench_stft():
     import audiolib.core as lx
-    lx_fn = lambda: lx.stft(Y, n_fft=N_FFT, hop_length=HOP_LENGTH)
+    def lx_fn():
+        return lx.stft(Y, n_fft=N_FFT, hop_length=HOP_LENGTH)
     lx_ms, _, _ = timeit(lx_fn)
 
     try:
         import librosa
-        lr_fn = lambda: librosa.stft(Y, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        def lr_fn():
+            return librosa.stft(Y, n_fft=N_FFT, hop_length=HOP_LENGTH)
         lr_ms, _, _ = timeit(lr_fn)
     except ImportError:
         lr_ms = None
@@ -69,13 +70,15 @@ def bench_stft():
 def bench_istft():
     import audiolib.core as lx
     D = lx.stft(Y, n_fft=N_FFT, hop_length=HOP_LENGTH)
-    lx_fn = lambda: lx.istft(D, hop_length=HOP_LENGTH, length=len(Y))
+    def lx_fn():
+        return lx.istft(D, hop_length=HOP_LENGTH, length=len(Y))
     lx_ms, _, _ = timeit(lx_fn)
 
     try:
         import librosa
         D_lr = librosa.stft(Y, n_fft=N_FFT, hop_length=HOP_LENGTH)
-        lr_fn = lambda: librosa.istft(D_lr, hop_length=HOP_LENGTH, length=len(Y))
+        def lr_fn():
+            return librosa.istft(D_lr, hop_length=HOP_LENGTH, length=len(Y))
         lr_ms, _, _ = timeit(lr_fn)
     except ImportError:
         lr_ms = None
@@ -85,12 +88,14 @@ def bench_istft():
 
 def bench_melspectrogram():
     import audiolib.feature as lxf
-    lx_fn = lambda: lxf.melspectrogram(y=Y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH)
+    def lx_fn():
+        return lxf.melspectrogram(y=Y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH)
     lx_ms, _, _ = timeit(lx_fn)
 
     try:
         import librosa
-        lr_fn = lambda: librosa.feature.melspectrogram(y=Y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        def lr_fn():
+            return librosa.feature.melspectrogram(y=Y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH)
         lr_ms, _, _ = timeit(lr_fn)
     except ImportError:
         lr_ms = None
@@ -100,12 +105,14 @@ def bench_melspectrogram():
 
 def bench_mfcc():
     import audiolib.feature as lxf
-    lx_fn = lambda: lxf.mfcc(y=Y, sr=SR, n_mfcc=13)
+    def lx_fn():
+        return lxf.mfcc(y=Y, sr=SR, n_mfcc=13)
     lx_ms, _, _ = timeit(lx_fn)
 
     try:
         import librosa
-        lr_fn = lambda: librosa.feature.mfcc(y=Y, sr=SR, n_mfcc=13)
+        def lr_fn():
+            return librosa.feature.mfcc(y=Y, sr=SR, n_mfcc=13)
         lr_ms, _, _ = timeit(lr_fn)
     except ImportError:
         lr_ms = None
@@ -115,12 +122,14 @@ def bench_mfcc():
 
 def bench_chroma():
     import audiolib.feature as lxf
-    lx_fn = lambda: lxf.chroma_stft(y=Y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH)
+    def lx_fn():
+        return lxf.chroma_stft(y=Y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH)
     lx_ms, _, _ = timeit(lx_fn)
 
     try:
         import librosa
-        lr_fn = lambda: librosa.feature.chroma_stft(y=Y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        def lr_fn():
+            return librosa.feature.chroma_stft(y=Y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH)
         lr_ms, _, _ = timeit(lr_fn)
     except ImportError:
         lr_ms = None
@@ -131,13 +140,15 @@ def bench_chroma():
 def bench_hz_to_mel():
     import audiolib.convert as lxc
     hz = np.linspace(0, 8000, 100_000).astype(np.float32)
-    lx_fn = lambda: lxc.hz_to_mel(hz)
+    def lx_fn():
+        return lxc.hz_to_mel(hz)
     lx_ms, _, _ = timeit(lx_fn, n_repeats=50)
 
     try:
         import librosa
         hz64 = hz.astype(np.float64)
-        lr_fn = lambda: librosa.hz_to_mel(hz64)
+        def lr_fn():
+            return librosa.hz_to_mel(hz64)
         lr_ms, _, _ = timeit(lr_fn, n_repeats=50)
     except ImportError:
         lr_ms = None
@@ -147,12 +158,14 @@ def bench_hz_to_mel():
 
 def bench_onset_strength():
     import audiolib.feature as lxf
-    lx_fn = lambda: lxf.onset_strength(y=Y, sr=SR, hop_length=HOP_LENGTH)
+    def lx_fn():
+        return lxf.onset_strength(y=Y, sr=SR, hop_length=HOP_LENGTH)
     lx_ms, _, _ = timeit(lx_fn)
 
     try:
         import librosa
-        lr_fn = lambda: librosa.onset.onset_strength(y=Y, sr=SR, hop_length=HOP_LENGTH)
+        def lr_fn():
+            return librosa.onset.onset_strength(y=Y, sr=SR, hop_length=HOP_LENGTH)
         lr_ms, _, _ = timeit(lr_fn)
     except ImportError:
         lr_ms = None

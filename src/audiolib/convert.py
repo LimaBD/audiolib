@@ -6,20 +6,36 @@ The hot-path computations run in Rust via _core.
 """
 from __future__ import annotations
 
-from typing import Union, Optional
-
 import numpy as np
 
 from audiolib._core import (
-    hz_to_mel as _hz_to_mel,
-    mel_to_hz as _mel_to_hz,
-    hz_to_midi as _hz_to_midi,
-    midi_to_hz as _midi_to_hz,
     frames_to_samples as _frames_to_samples,
+)
+from audiolib._core import (
     frames_to_time as _frames_to_time,
+)
+from audiolib._core import (
+    hz_to_mel as _hz_to_mel,
+)
+from audiolib._core import (
+    hz_to_midi as _hz_to_midi,
+)
+from audiolib._core import (
+    mel_to_hz as _mel_to_hz,
+)
+from audiolib._core import (
+    midi_to_hz as _midi_to_hz,
+)
+from audiolib._core import (
     samples_to_frames as _samples_to_frames,
+)
+from audiolib._core import (
     samples_to_time as _samples_to_time,
+)
+from audiolib._core import (
     time_to_frames as _time_to_frames,
+)
+from audiolib._core import (
     time_to_samples as _time_to_samples,
 )
 
@@ -56,10 +72,10 @@ _NOTE_MAP = {
 
 
 def hz_to_mel(
-    frequencies: Union[float, np.ndarray, list],
+    frequencies: float | np.ndarray | list,
     *,
     htk: bool = False,
-) -> Union[float, np.ndarray]:
+) -> float | np.ndarray:
     """Convert Hz to Mels.
 
     API-compatible with ``librosa.hz_to_mel``.
@@ -71,10 +87,10 @@ def hz_to_mel(
 
 
 def mel_to_hz(
-    mels: Union[float, np.ndarray, list],
+    mels: float | np.ndarray | list,
     *,
     htk: bool = False,
-) -> Union[float, np.ndarray]:
+) -> float | np.ndarray:
     """Convert Mels to Hz.
 
     API-compatible with ``librosa.mel_to_hz``.
@@ -89,8 +105,8 @@ def mel_to_hz(
 
 
 def hz_to_midi(
-    frequencies: Union[float, np.ndarray, list],
-) -> Union[float, np.ndarray]:
+    frequencies: float | np.ndarray | list,
+) -> float | np.ndarray:
     """Convert Hz to MIDI note numbers.
 
     API-compatible with ``librosa.hz_to_midi``.
@@ -102,8 +118,8 @@ def hz_to_midi(
 
 
 def midi_to_hz(
-    notes: Union[float, np.ndarray, list],
-) -> Union[float, np.ndarray]:
+    notes: float | np.ndarray | list,
+) -> float | np.ndarray:
     """Convert MIDI note numbers to Hz.
 
     API-compatible with ``librosa.midi_to_hz``.
@@ -115,11 +131,11 @@ def midi_to_hz(
 
 
 def midi_to_note(
-    midi: Union[int, float, np.ndarray, list],
+    midi: int | float | np.ndarray | list,
     *,
     octave: bool = True,
     cents: bool = False,
-) -> Union[str, list]:
+) -> str | list:
     """Convert MIDI number(s) to note strings.
 
     API-compatible with ``librosa.midi_to_note``.
@@ -145,10 +161,10 @@ def midi_to_note(
 
 
 def note_to_midi(
-    note: Union[str, list],
+    note: str | list,
     *,
     round_midi: bool = True,
-) -> Union[int, float, list]:
+) -> int | float | list:
     """Convert note string(s) to MIDI number(s).
 
     API-compatible with ``librosa.note_to_midi``.
@@ -175,9 +191,9 @@ def note_to_midi(
 
 
 def note_to_hz(
-    note: Union[str, list],
+    note: str | list,
     **kwargs,
-) -> Union[float, np.ndarray]:
+) -> float | np.ndarray:
     """Convert note string(s) to Hz.
 
     API-compatible with ``librosa.note_to_hz``.
@@ -189,9 +205,9 @@ def note_to_hz(
 
 
 def hz_to_note(
-    frequencies: Union[float, np.ndarray, list],
+    frequencies: float | np.ndarray | list,
     **kwargs,
-) -> Union[str, list]:
+) -> str | list:
     """Convert Hz to nearest note name(s).
 
     API-compatible with ``librosa.hz_to_note``.
@@ -204,11 +220,11 @@ def hz_to_note(
 
 
 def frames_to_samples(
-    frames: Union[int, np.ndarray, list],
+    frames: int | np.ndarray | list,
     *,
     hop_length: int = 512,
-    n_fft: Optional[int] = None,
-) -> Union[int, np.ndarray]:
+    n_fft: int | None = None,
+) -> int | np.ndarray:
     """Convert frame indices to audio sample indices.
 
     API-compatible with ``librosa.frames_to_samples``.
@@ -220,12 +236,12 @@ def frames_to_samples(
 
 
 def frames_to_time(
-    frames: Union[int, np.ndarray, list],
+    frames: int | np.ndarray | list,
     *,
     sr: float = 22050,
     hop_length: int = 512,
-    n_fft: Optional[int] = None,
-) -> Union[float, np.ndarray]:
+    n_fft: int | None = None,
+) -> float | np.ndarray:
     """Convert frame counts to time (seconds).
 
     API-compatible with ``librosa.frames_to_time``.
@@ -237,11 +253,11 @@ def frames_to_time(
 
 
 def samples_to_frames(
-    samples: Union[int, np.ndarray, list],
+    samples: int | np.ndarray | list,
     *,
     hop_length: int = 512,
-    n_fft: Optional[int] = None,
-) -> Union[int, np.ndarray]:
+    n_fft: int | None = None,
+) -> int | np.ndarray:
     """Convert sample indices to STFT frames.
 
     API-compatible with ``librosa.samples_to_frames``.
@@ -253,10 +269,10 @@ def samples_to_frames(
 
 
 def samples_to_time(
-    samples: Union[int, np.ndarray, list],
+    samples: int | np.ndarray | list,
     *,
     sr: float = 22050,
-) -> Union[float, np.ndarray]:
+) -> float | np.ndarray:
     """Convert sample indices to time (seconds).
 
     API-compatible with ``librosa.samples_to_time``.
@@ -268,12 +284,12 @@ def samples_to_time(
 
 
 def time_to_frames(
-    times: Union[float, np.ndarray, list],
+    times: float | np.ndarray | list,
     *,
     sr: float = 22050,
     hop_length: int = 512,
-    n_fft: Optional[int] = None,
-) -> Union[int, np.ndarray]:
+    n_fft: int | None = None,
+) -> int | np.ndarray:
     """Convert timestamps (seconds) to STFT frames.
 
     API-compatible with ``librosa.time_to_frames``.
@@ -285,10 +301,10 @@ def time_to_frames(
 
 
 def time_to_samples(
-    times: Union[float, np.ndarray, list],
+    times: float | np.ndarray | list,
     *,
     sr: float = 22050,
-) -> Union[int, np.ndarray]:
+) -> int | np.ndarray:
     """Convert timestamps (seconds) to sample indices.
 
     API-compatible with ``librosa.time_to_samples``.

@@ -10,8 +10,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from tests.conftest import N_FFT, HOP_LENGTH, N_SAMPLES, SR, assert_allclose_relaxed
-
+from tests.conftest import HOP_LENGTH, N_FFT, N_SAMPLES
 
 # ---------------------------------------------------------------------------
 # to_mono
@@ -110,9 +109,8 @@ class TestGetSamplerate:
 
 class TestLoad:
     def _write_wav(self, y, sr):
-        f = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-        sf.write(f.name, y, sr)
-        f.close()
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            sf.write(f.name, y, sr)
         return f.name
 
     def test_load_mono(self, sine_440, sr):
@@ -188,13 +186,13 @@ class TestSTFT:
 
 class TestISTFT:
     def test_roundtrip_shape(self, sine_440):
-        from audiolib.core import stft, istft
+        from audiolib.core import istft, stft
         D = stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH)
         y_back = istft(D, hop_length=HOP_LENGTH, length=len(sine_440))
         assert len(y_back) == len(sine_440)
 
     def test_roundtrip_fidelity(self, sine_440):
-        from audiolib.core import stft, istft
+        from audiolib.core import istft, stft
         D = stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH)
         y_back = istft(D, hop_length=HOP_LENGTH, length=len(sine_440))
         # Exclude boundary N_FFT//2 samples on each side (edge effects from zero-padding)
@@ -248,7 +246,7 @@ class TestMagnitudeScaling:
         np.testing.assert_allclose(x_back, x, rtol=1e-4)
 
     def test_db_roundtrip_power(self):
-        from audiolib.core import power_to_db, db_to_power
+        from audiolib.core import db_to_power, power_to_db
         x = np.array([1e-4, 1e-3, 1.0, 1e3], dtype=np.float32)
         db = power_to_db(x)
         x_back = db_to_power(db)

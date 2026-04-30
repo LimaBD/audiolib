@@ -5,24 +5,41 @@ All functions here are API-compatible with librosa.feature.
 """
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 
 from audiolib._core import (
-    mel_filterbank as _mel_filterbank,
-    melspectrogram as _melspectrogram,
-    mfcc as _mfcc,
     chroma_stft as _chroma_stft,
-    spectral_centroid as _spectral_centroid,
-    spectral_bandwidth as _spectral_bandwidth,
-    spectral_rolloff as _spectral_rolloff,
-    spectral_flatness as _spectral_flatness,
-    onset_strength as _onset_strength,
-    yin as _yin,
+)
+from audiolib._core import (
     get_rms as _get_rms,
 )
-from audiolib.core import stft, power_to_db
+from audiolib._core import (
+    mel_filterbank as _mel_filterbank,
+)
+from audiolib._core import (
+    melspectrogram as _melspectrogram,
+)
+from audiolib._core import (
+    mfcc as _mfcc,
+)
+from audiolib._core import (
+    onset_strength as _onset_strength,
+)
+from audiolib._core import (
+    spectral_bandwidth as _spectral_bandwidth,
+)
+from audiolib._core import (
+    spectral_centroid as _spectral_centroid,
+)
+from audiolib._core import (
+    spectral_flatness as _spectral_flatness,
+)
+from audiolib._core import (
+    spectral_rolloff as _spectral_rolloff,
+)
+from audiolib.core import power_to_db, stft
 
 __all__ = [
     "melspectrogram",

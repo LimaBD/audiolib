@@ -7,27 +7,48 @@ Audio file loading delegates to soundfile for broad codec support.
 """
 from __future__ import annotations
 
-import os
 import math
-import warnings
-from typing import Optional, Tuple, Union, BinaryIO
+import os
+from typing import BinaryIO
 
 import numpy as np
 import soundfile as sf
 
 from audiolib._core import (
-    stft as _stft_rust,
-    istft as _istft_rust,
     amplitude_to_db as _amp_to_db,
-    power_to_db as _pow_to_db,
-    db_to_amplitude as _db_to_amp,
-    db_to_power as _db_to_pow,
-    zero_crossings as _zero_crossings,
+)
+from audiolib._core import (
     autocorrelate as _autocorrelate,
+)
+from audiolib._core import (
+    db_to_amplitude as _db_to_amp,
+)
+from audiolib._core import (
+    db_to_power as _db_to_pow,
+)
+from audiolib._core import (
+    istft as _istft_rust,
+)
+from audiolib._core import (
     mu_compress as _mu_compress,
+)
+from audiolib._core import (
     mu_expand as _mu_expand,
-    to_mono as _to_mono,
+)
+from audiolib._core import (
+    power_to_db as _pow_to_db,
+)
+from audiolib._core import (
     resample as _resample,
+)
+from audiolib._core import (
+    stft as _stft_rust,
+)
+from audiolib._core import (
+    to_mono as _to_mono,
+)
+from audiolib._core import (
+    zero_crossings as _zero_crossings,
 )
 from audiolib.exceptions import ParameterError
 
@@ -57,15 +78,15 @@ __all__ = [
 
 
 def load(
-    path: Union[str, int, os.PathLike, BinaryIO],
+    path: str | int | os.PathLike | BinaryIO,
     *,
-    sr: Optional[float] = 22050,
+    sr: float | None = 22050,
     mono: bool = True,
     offset: float = 0.0,
-    duration: Optional[float] = None,
+    duration: float | None = None,
     dtype=np.float32,
     res_type: str = "soxr_hq",
-) -> Tuple[np.ndarray, Union[int, float]]:
+) -> tuple[np.ndarray, int | float]:
     """Load an audio file as a floating point time series.
 
     API-compatible with ``librosa.load``.
@@ -96,15 +117,11 @@ def load(
     """
     with sf.SoundFile(path) as f:
         sr_native = f.samplerate
-        n_channels = f.channels
 
         if offset > 0.0:
             f.seek(int(offset * sr_native))
 
-        if duration is not None:
-            frames = int(duration * sr_native)
-        else:
-            frames = -1
+        frames = int(duration * sr_native) if duration is not None else -1
 
         y = f.read(frames=frames, dtype=dtype, always_2d=True).T  # (channels, samples)
 
@@ -123,13 +140,13 @@ def load(
 
 def get_duration(
     *,
-    y: Optional[np.ndarray] = None,
+    y: np.ndarray | None = None,
     sr: float = 22050,
-    S: Optional[np.ndarray] = None,
+    S: np.ndarray | None = None,
     n_fft: int = 2048,
     hop_length: int = 512,
     center: bool = True,
-    path: Optional[Union[str, os.PathLike]] = None,
+    path: str | os.PathLike | None = None,
 ) -> float:
     """Compute the duration (in seconds) of an audio time series or file.
 
@@ -151,7 +168,7 @@ def get_duration(
     raise ParameterError("At least one of (y, sr), S, or path must be provided")
 
 
-def get_samplerate(path: Union[str, int, BinaryIO]) -> float:
+def get_samplerate(path: str | int | BinaryIO) -> float:
     """Get the sampling rate for a given file.
 
     API-compatible with ``librosa.get_samplerate``.
@@ -257,8 +274,8 @@ def stft(
     y: np.ndarray,
     *,
     n_fft: int = 2048,
-    hop_length: Optional[int] = None,
-    win_length: Optional[int] = None,
+    hop_length: int | None = None,
+    win_length: int | None = None,
     window: str = "hann",
     center: bool = True,
     dtype=np.complex64,
@@ -309,12 +326,12 @@ def stft(
 def istft(
     stft_matrix: np.ndarray,
     *,
-    hop_length: Optional[int] = None,
-    win_length: Optional[int] = None,
+    hop_length: int | None = None,
+    win_length: int | None = None,
     window: str = "hann",
     center: bool = True,
     dtype=np.float32,
-    length: Optional[int] = None,
+    length: int | None = None,
 ) -> np.ndarray:
     """Inverse short-time Fourier transform.
 
@@ -339,7 +356,7 @@ def istft(
     return y
 
 
-def magphase(D: np.ndarray, *, power: float = 1) -> Tuple[np.ndarray, np.ndarray]:
+def magphase(D: np.ndarray, *, power: float = 1) -> tuple[np.ndarray, np.ndarray]:
     """Separate a complex STFT into magnitude and phase.
 
     API-compatible with ``librosa.magphase``.
@@ -359,9 +376,9 @@ def magphase(D: np.ndarray, *, power: float = 1) -> Tuple[np.ndarray, np.ndarray
 def amplitude_to_db(
     S: np.ndarray,
     *,
-    ref: Union[float, callable] = 1.0,
+    ref: float | callable = 1.0,
     amin: float = 1e-5,
-    top_db: Optional[float] = 80.0,
+    top_db: float | None = 80.0,
 ) -> np.ndarray:
     """Convert amplitude spectrogram to dB.
 
@@ -376,9 +393,9 @@ def amplitude_to_db(
 def power_to_db(
     S: np.ndarray,
     *,
-    ref: Union[float, callable] = 1.0,
+    ref: float | callable = 1.0,
     amin: float = 1e-10,
-    top_db: Optional[float] = 80.0,
+    top_db: float | None = 80.0,
 ) -> np.ndarray:
     """Convert power spectrogram to dB.
 
@@ -447,7 +464,7 @@ def zero_crossings(
 def autocorrelate(
     y: np.ndarray,
     *,
-    max_size: Optional[int] = None,
+    max_size: int | None = None,
     axis: int = -1,
 ) -> np.ndarray:
     """Bounded-lag auto-correlation.
@@ -511,7 +528,7 @@ def clicks(
     click_freq: float = 1000.0,
     click_duration: float = 0.1,
     click=None,
-    length: Optional[int] = None,
+    length: int | None = None,
 ) -> np.ndarray:
     """Construct a click track.
 
@@ -558,9 +575,9 @@ def tone(
     frequency: float,
     *,
     sr: float = 22050,
-    length: Optional[int] = None,
-    duration: Optional[float] = None,
-    phi: Optional[float] = None,
+    length: int | None = None,
+    duration: float | None = None,
+    phi: float | None = None,
 ) -> np.ndarray:
     """Construct a pure tone (cosine) signal.
 
@@ -582,10 +599,10 @@ def chirp(
     fmin: float,
     fmax: float,
     sr: float = 22050,
-    length: Optional[int] = None,
-    duration: Optional[float] = None,
+    length: int | None = None,
+    duration: float | None = None,
     linear: bool = False,
-    phi: Optional[float] = None,
+    phi: float | None = None,
 ) -> np.ndarray:
     """Construct a chirp / sine-sweep signal.
 

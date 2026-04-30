@@ -6,8 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from tests.conftest import SR, HOP_LENGTH, N_FFT
-
+from tests.conftest import HOP_LENGTH, N_FFT, SR
 
 # ---------------------------------------------------------------------------
 # hz_to_mel / mel_to_hz
@@ -95,7 +94,7 @@ class TestNoteConversions:
         assert midi_to_note(69) == "A4"
 
     def test_note_roundtrip(self):
-        from audiolib.convert import note_to_midi, midi_to_note
+        from audiolib.convert import midi_to_note, note_to_midi
         for note in ["C4", "D4", "E4", "F4", "G4", "A4", "B4"]:
             midi = note_to_midi(note)
             back = midi_to_note(midi)

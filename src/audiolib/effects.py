@@ -5,11 +5,9 @@ API-compatible with librosa.effects.
 """
 from __future__ import annotations
 
-from typing import Optional, Union, Tuple
-
 import numpy as np
 
-from audiolib.core import stft, istft, magphase
+from audiolib.core import istft, magphase, stft
 from audiolib.exceptions import ParameterError
 
 __all__ = [
@@ -47,7 +45,7 @@ def time_stretch(y: np.ndarray, *, rate: float, **kwargs) -> np.ndarray:
 
     n_fft = kwargs.get("n_fft", 2048)
     hop_length = kwargs.get("hop_length", n_fft // 4)
-    win_length = kwargs.get("win_length", None)
+    win_length = kwargs.get("win_length")
 
     D = stft(y, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
     n_bins, n_frames = D.shape
@@ -101,7 +99,7 @@ def trim(
     ref=np.max,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """Trim leading and trailing silence from an audio signal.
 
     API-compatible with ``librosa.effects.trim``.
@@ -112,8 +110,8 @@ def trim(
     index : np.ndarray [shape=(2,)]
         Indices of the non-silent region [start, end).
     """
-    from audiolib.feature import rms
     from audiolib.core import power_to_db
+    from audiolib.feature import rms
 
     rms_energy = rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
     db = power_to_db(rms_energy ** 2, ref=ref)
@@ -151,8 +149,11 @@ def split(
     intervals : np.ndarray [shape=(n_intervals, 2)]
         Sample indices of non-silent segments.
     """
-    from audiolib.feature import rms
     from audiolib.core import power_to_db
+    from audiolib.feature import rms
+
+    rms_energy = rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
+    db = power_to_db(rms_energy ** 2, ref=ref)
     threshold = db.max() - top_db
 
     is_voiced = db >= threshold
@@ -190,14 +191,14 @@ def percussive(y: np.ndarray, **kwargs) -> np.ndarray:
 def hpss(
     y: np.ndarray,
     *,
-    kernel_size: Union[int, Tuple[int, int]] = 31,
+    kernel_size: int | tuple[int, int] = 31,
     power: float = 2.0,
     mask: bool = False,
-    margin: Union[float, Tuple[float, float]] = 1.0,
+    margin: float | tuple[float, float] = 1.0,
     n_fft: int = 2048,
     hop_length: int = 512,
     **kwargs,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """Harmonic-percussive source separation.
 
     API-compatible with ``librosa.effects.hpss``.

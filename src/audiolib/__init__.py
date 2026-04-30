@@ -13,46 +13,46 @@ all compiled to machine code via PyO3, all accessible from Python:
     mfccs = audiolib.feature.mfcc(y=y, sr=sr)
 """
 
-from audiolib.core import (
-    load,
-    get_duration,
-    get_samplerate,
-    to_mono,
-    resample,
-    stft,
-    istft,
-    magphase,
-    amplitude_to_db,
-    db_to_amplitude,
-    power_to_db,
-    db_to_power,
-    zero_crossings,
-    autocorrelate,
-    mu_compress,
-    mu_expand,
-    clicks,
-    tone,
-    chirp,
-)
+from audiolib import effects, feature, util
 from audiolib.convert import (
+    fft_frequencies,
+    frames_to_samples,
+    frames_to_time,
     hz_to_mel,
-    mel_to_hz,
     hz_to_midi,
+    hz_to_note,
+    mel_frequencies,
+    mel_to_hz,
     midi_to_hz,
     midi_to_note,
     note_to_hz,
     note_to_midi,
-    hz_to_note,
-    frames_to_samples,
-    frames_to_time,
     samples_to_frames,
     samples_to_time,
     time_to_frames,
     time_to_samples,
-    fft_frequencies,
-    mel_frequencies,
 )
-from audiolib import feature, effects, util
+from audiolib.core import (
+    amplitude_to_db,
+    autocorrelate,
+    chirp,
+    clicks,
+    db_to_amplitude,
+    db_to_power,
+    get_duration,
+    get_samplerate,
+    istft,
+    load,
+    magphase,
+    mu_compress,
+    mu_expand,
+    power_to_db,
+    resample,
+    stft,
+    to_mono,
+    tone,
+    zero_crossings,
+)
 from audiolib.exceptions import AudiolibError, ParameterError
 
 __version__ = "0.1.0"

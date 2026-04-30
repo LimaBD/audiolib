@@ -4,10 +4,8 @@ Tests for audiolib.feature — feature extraction functions.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
-from tests.conftest import N_FFT, HOP_LENGTH, SR, N_SAMPLES
-
+from tests.conftest import HOP_LENGTH, N_FFT, N_SAMPLES
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -15,10 +13,7 @@ from tests.conftest import N_FFT, HOP_LENGTH, SR, N_SAMPLES
 
 def n_frames_for(n_samples=N_SAMPLES, hop_length=HOP_LENGTH, n_fft=N_FFT, center=True):
     """Expected number of STFT frames."""
-    if center:
-        n = n_samples + n_fft
-    else:
-        n = n_samples
+    n = n_samples + n_fft if center else n_samples
     return 1 + (n - n_fft) // hop_length
 
 
