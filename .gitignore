@@ -15,7 +15,6 @@ env/
 
 # Rust / Cargo
 native/target/
-Cargo.lock
 
 # Maturin / PyO3
 *.pyi
