@@ -68,7 +68,8 @@ def time_stretch(y: np.ndarray, *, rate: float, **kwargs) -> np.ndarray:
         angle = (1 - alpha) * angle_lo + alpha * angle_hi
         D_stretch[:, i] = mag * np.exp(1j * angle)
 
-    return istft(D_stretch, hop_length=hop_length, win_length=win_length)
+    expected_length = int(np.round(len(y) / rate))
+    return istft(D_stretch, hop_length=hop_length, win_length=win_length, length=expected_length)
 
 
 def pitch_shift(
@@ -113,6 +114,10 @@ def trim(
     from audiolib.core import power_to_db
     from audiolib.feature import rms
 
+    # Silent signal: return empty slice immediately
+    if np.max(np.abs(y)) < 1e-7:
+        return y[:0], np.array([0, 0])
+
     rms_energy = rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
     db = power_to_db(rms_energy ** 2, ref=ref)
     threshold = db.max() - top_db
@@ -151,6 +156,10 @@ def split(
     """
     from audiolib.core import power_to_db
     from audiolib.feature import rms
+
+    # Silent signal: return empty intervals immediately
+    if np.max(np.abs(y)) < 1e-7:
+        return np.zeros((0, 2), dtype=np.int64)
 
     rms_energy = rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
     db = power_to_db(rms_energy ** 2, ref=ref)

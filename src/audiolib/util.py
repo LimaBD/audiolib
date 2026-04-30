@@ -91,6 +91,11 @@ def frame(
     if hop_length <= 0:
         raise ParameterError("hop_length must be > 0")
 
+    # Normalise axis to a non-negative index
+    ndim = x.ndim
+    if axis < 0:
+        axis = axis + ndim
+
     n = x.shape[axis]
     if n < frame_length:
         raise ParameterError(
@@ -238,10 +243,20 @@ def axis_sort(
     if value is None:
         value = np.argmax
 
-    bin_idx = value(S, axis=axis)
+    # Apply the value function along the *perpendicular* axis to get one
+    # summary value per slice along `axis`.  For a 2-D matrix with axis=-1
+    # (sort columns), we reduce along axis=0 to get a per-column summary.
+    ndim = S.ndim
+    norm_axis = axis % ndim
+    perp_axis = (norm_axis - 1) % ndim  # axis 0 for 2-D column sort
+
+    bin_idx = value(S, axis=perp_axis)
     idx = np.argsort(bin_idx)
 
-    S_sorted = S[:, idx] if axis == -1 or axis == S.ndim - 1 else S[idx]
+    # Index S along the sorting axis
+    take = [slice(None)] * ndim
+    take[norm_axis] = idx
+    S_sorted = S[tuple(take)]
 
     if index:
         return S_sorted, idx

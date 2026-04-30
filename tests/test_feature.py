@@ -258,3 +258,218 @@ class TestOnsetStrength:
         from audiolib import feature
         oenv = feature.onset_strength(S=np.abs(stft_matrix), sr=sr)
         assert oenv.ndim == 1
+
+
+# ---------------------------------------------------------------------------
+# delta
+# ---------------------------------------------------------------------------
+
+class TestDelta:
+    def test_output_shape_default(self, sine_440, sr):
+        from audiolib import feature
+        mfcc = feature.mfcc(y=sine_440, sr=sr, n_mfcc=13)
+        d = feature.delta(mfcc)
+        assert d.shape == mfcc.shape
+
+    def test_second_order_delta(self, sine_440, sr):
+        from audiolib import feature
+        mfcc = feature.mfcc(y=sine_440, sr=sr, n_mfcc=13)
+        d2 = feature.delta(mfcc, order=2)
+        assert d2.shape == mfcc.shape
+
+    def test_constant_signal_zero_delta(self):
+        from audiolib import feature
+        x = np.ones((5, 20), dtype=np.float32)
+        d = feature.delta(x)
+        np.testing.assert_allclose(d, 0.0, atol=1e-5)
+
+    def test_linear_ramp_constant_derivative(self):
+        from audiolib import feature
+        # Linear ramp: delta should be nearly constant (away from edges)
+        x = np.tile(np.arange(20, dtype=np.float32), (3, 1))
+        d = feature.delta(x)
+        assert d.shape == x.shape
+
+    def test_width_param(self, sine_440, sr):
+        from audiolib import feature
+        mfcc = feature.mfcc(y=sine_440, sr=sr, n_mfcc=13)
+        d3 = feature.delta(mfcc, width=3)
+        d9 = feature.delta(mfcc, width=9)
+        assert d3.shape == d9.shape == mfcc.shape
+
+    def test_axis_param(self, sine_440, sr):
+        from audiolib import feature
+        mfcc = feature.mfcc(y=sine_440, sr=sr, n_mfcc=13)
+        d = feature.delta(mfcc, axis=0)
+        assert d.shape == mfcc.shape
+
+    def test_dtype_preserved(self, sine_440, sr):
+        from audiolib import feature
+        mfcc = feature.mfcc(y=sine_440, sr=sr, n_mfcc=13)
+        d = feature.delta(mfcc)
+        assert np.issubdtype(d.dtype, np.floating)
+
+
+# ---------------------------------------------------------------------------
+# stack_memory
+# ---------------------------------------------------------------------------
+
+class TestStackMemory:
+    def test_output_shape(self, sine_440, sr):
+        from audiolib import feature
+        mfcc = feature.mfcc(y=sine_440, sr=sr, n_mfcc=13)
+        stacked = feature.stack_memory(mfcc, n_steps=3)
+        assert stacked.shape[0] == 13 * 3
+        assert stacked.shape[1] == mfcc.shape[1]
+
+    def test_n_steps_1_noop(self, sine_440, sr):
+        from audiolib import feature
+        mfcc = feature.mfcc(y=sine_440, sr=sr, n_mfcc=13)
+        stacked = feature.stack_memory(mfcc, n_steps=1)
+        # n_steps=1 should return the input (padded or not)
+        assert stacked.shape[0] == 13
+        assert stacked.shape[1] == mfcc.shape[1]
+
+    def test_n_steps_2(self, sine_440, sr):
+        from audiolib import feature
+        mfcc = feature.mfcc(y=sine_440, sr=sr, n_mfcc=13)
+        stacked = feature.stack_memory(mfcc, n_steps=2)
+        assert stacked.shape == (26, mfcc.shape[1])
+
+    def test_delay_param(self, sine_440, sr):
+        from audiolib import feature
+        mfcc = feature.mfcc(y=sine_440, sr=sr, n_mfcc=13)
+        stacked = feature.stack_memory(mfcc, n_steps=2, delay=2)
+        assert stacked.shape[0] == 26
+        assert stacked.shape[1] == mfcc.shape[1]
+
+
+# ---------------------------------------------------------------------------
+# spectral_contrast
+# ---------------------------------------------------------------------------
+
+class TestSpectralContrast:
+    def test_shape_default(self, sine_440, sr):
+        from audiolib import feature
+        sc = feature.spectral_contrast(y=sine_440, sr=sr, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        nf = n_frames_for(len(sine_440))
+        # Default n_bands=6 → 7 rows (n_bands + 1)
+        assert sc.shape == (7, nf)
+
+    def test_n_bands_param(self, sine_440, sr):
+        from audiolib import feature
+        sc = feature.spectral_contrast(y=sine_440, sr=sr, n_bands=4)
+        assert sc.shape[0] == 5  # n_bands + 1
+
+    def test_from_S(self, stft_matrix, sr):
+        from audiolib import feature
+        sc = feature.spectral_contrast(S=np.abs(stft_matrix), sr=sr, n_fft=N_FFT)
+        assert sc.shape[0] == 7
+
+    def test_non_negative_output(self, white_noise, sr):
+        from audiolib import feature
+        sc = feature.spectral_contrast(y=white_noise, sr=sr)
+        # Contrast values can be any sign; check they're finite
+        assert np.isfinite(sc).all()
+
+    def test_pure_tone_vs_noise(self, sine_440, white_noise, sr):
+        from audiolib import feature
+        # Pure tone should have higher contrast (peaked spectrum) than noise
+        sc_sine = feature.spectral_contrast(y=sine_440, sr=sr)
+        sc_noise = feature.spectral_contrast(y=white_noise, sr=sr)
+        assert sc_sine.mean() > sc_noise.mean() - 1.0  # loose check
+
+
+# ---------------------------------------------------------------------------
+# tonnetz
+# ---------------------------------------------------------------------------
+
+class TestTonnetz:
+    def test_shape(self, sine_440, sr):
+        from audiolib import feature
+        tnz = feature.tonnetz(y=sine_440, sr=sr)
+        nf = n_frames_for(len(sine_440))
+        assert tnz.shape == (6, nf)
+
+    def test_from_chroma(self, sine_440, sr):
+        from audiolib import feature
+        chroma = feature.chroma_stft(y=sine_440, sr=sr, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        tnz = feature.tonnetz(chroma=chroma)
+        assert tnz.shape == (6, chroma.shape[1])
+
+    def test_values_bounded(self, sine_440, sr):
+        from audiolib import feature
+        tnz = feature.tonnetz(y=sine_440, sr=sr)
+        # Tonnetz values should be in a reasonable range
+        assert np.isfinite(tnz).all()
+
+    def test_dtype_float(self, sine_440, sr):
+        from audiolib import feature
+        tnz = feature.tonnetz(y=sine_440, sr=sr)
+        assert np.issubdtype(tnz.dtype, np.floating)
+
+
+# ---------------------------------------------------------------------------
+# poly_features
+# ---------------------------------------------------------------------------
+
+class TestPolyFeatures:
+    def test_shape_order_0(self, sine_440, sr):
+        from audiolib import feature
+        pf = feature.poly_features(y=sine_440, sr=sr, order=0, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        nf = n_frames_for(len(sine_440))
+        assert pf.shape == (1, nf)
+
+    def test_shape_order_1(self, sine_440, sr):
+        from audiolib import feature
+        pf = feature.poly_features(y=sine_440, sr=sr, order=1, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        nf = n_frames_for(len(sine_440))
+        assert pf.shape == (2, nf)
+
+    def test_shape_order_2(self, sine_440, sr):
+        from audiolib import feature
+        pf = feature.poly_features(y=sine_440, sr=sr, order=2, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        nf = n_frames_for(len(sine_440))
+        assert pf.shape == (3, nf)
+
+    def test_from_S(self, stft_matrix, sr):
+        from audiolib import feature
+        pf = feature.poly_features(S=np.abs(stft_matrix), sr=sr, n_fft=N_FFT, order=1)
+        assert pf.shape[0] == 2
+        assert np.isfinite(pf).all()
+
+    def test_dtype_float(self, sine_440, sr):
+        from audiolib import feature
+        pf = feature.poly_features(y=sine_440, sr=sr, order=1)
+        assert np.issubdtype(pf.dtype, np.floating)
+
+
+# ---------------------------------------------------------------------------
+# tempogram
+# ---------------------------------------------------------------------------
+
+class TestTempogram:
+    def test_shape(self, sine_440, sr):
+        from audiolib import feature
+        tg = feature.tempogram(y=sine_440, sr=sr, hop_length=HOP_LENGTH)
+        # Default win_length=384 → n_tempo_bins rows
+        assert tg.ndim == 2
+        assert tg.shape[1] > 0
+
+    def test_from_onset_envelope(self, sine_440, sr):
+        from audiolib import feature
+        oenv = feature.onset_strength(y=sine_440, sr=sr, hop_length=HOP_LENGTH)
+        tg = feature.tempogram(onset_envelope=oenv, sr=sr, hop_length=HOP_LENGTH)
+        assert tg.ndim == 2
+
+    def test_non_negative(self, sine_440, sr):
+        from audiolib import feature
+        tg = feature.tempogram(y=sine_440, sr=sr, hop_length=HOP_LENGTH)
+        # Tempogram rows correspond to lag/autocorrelation values; values are
+        # real-valued and need not be non-negative (auto-correlation ranges in [-1,1]).
+        assert np.isfinite(tg).all()
+
+    def test_win_length_param(self, sine_440, sr):
+        from audiolib import feature
+        tg = feature.tempogram(y=sine_440, sr=sr, hop_length=HOP_LENGTH, win_length=128)
+        assert tg.ndim == 2

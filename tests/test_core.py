@@ -364,3 +364,79 @@ class TestClicks:
         y = clicks(times=[0.1, 0.5, 0.9], sr=sr)
         assert y.ndim == 1
         assert len(y) > 0
+
+
+# ---------------------------------------------------------------------------
+# phase_vocoder
+# ---------------------------------------------------------------------------
+
+class TestPhaseVocoder:
+    def test_output_dtype_complex(self, sine_440):
+        from audiolib.core import phase_vocoder, stft
+        D = stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        D_stretched = phase_vocoder(D, rate=1.5, hop_length=HOP_LENGTH)
+        assert np.iscomplexobj(D_stretched)
+
+    def test_output_freq_bins_unchanged(self, sine_440):
+        from audiolib.core import phase_vocoder, stft
+        D = stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        rate = 1.5
+        D_stretched = phase_vocoder(D, rate=rate, hop_length=HOP_LENGTH)
+        assert D_stretched.shape[0] == D.shape[0]
+
+    def test_output_time_scaled(self, sine_440):
+        from audiolib.core import phase_vocoder, stft
+        D = stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        rate = 2.0
+        D_stretched = phase_vocoder(D, rate=rate, hop_length=HOP_LENGTH)
+        expected_frames = int(np.round(D.shape[1] / rate))
+        # Allow ±2 frames
+        assert abs(D_stretched.shape[1] - expected_frames) <= 2
+
+    def test_rate_1_same_shape(self, sine_440):
+        from audiolib.core import phase_vocoder, stft
+        D = stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        D_out = phase_vocoder(D, rate=1.0, hop_length=HOP_LENGTH)
+        assert D_out.shape == D.shape
+
+    def test_magnitudes_preserved(self, sine_440):
+        from audiolib.core import phase_vocoder, stft
+        D = stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        D_out = phase_vocoder(D, rate=1.0, hop_length=HOP_LENGTH)
+        # Phase vocoder at rate=1 should preserve magnitudes approximately
+        np.testing.assert_allclose(
+            np.abs(D_out), np.abs(D), rtol=0.1
+        )
+
+
+# ---------------------------------------------------------------------------
+# griffinlim
+# ---------------------------------------------------------------------------
+
+class TestGriffinLim:
+    def test_output_1d(self, sine_440):
+        from audiolib.core import griffinlim, stft
+        S = np.abs(stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH))
+        y = griffinlim(S, n_iter=10, hop_length=HOP_LENGTH)
+        assert y.ndim == 1
+        assert len(y) > 0
+
+    def test_output_dtype_float32(self, sine_440):
+        from audiolib.core import griffinlim, stft
+        S = np.abs(stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH))
+        y = griffinlim(S, n_iter=5, hop_length=HOP_LENGTH)
+        assert y.dtype == np.float32
+
+    def test_output_length_approx(self, sine_440):
+        from audiolib.core import griffinlim, stft
+        S = np.abs(stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH))
+        y = griffinlim(S, n_iter=5, hop_length=HOP_LENGTH, length=len(sine_440))
+        assert len(y) == len(sine_440)
+
+    def test_reconstruction_energy(self, sine_440):
+        from audiolib.core import griffinlim, stft
+        S = np.abs(stft(sine_440, n_fft=N_FFT, hop_length=HOP_LENGTH))
+        y = griffinlim(S, n_iter=32, hop_length=HOP_LENGTH, length=len(sine_440))
+        # Reconstructed signal should have comparable energy
+        ratio = np.sum(y ** 2) / np.sum(sine_440 ** 2)
+        assert 0.3 < ratio < 3.0

@@ -31,6 +31,16 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dsp::spectral_flatness, m)?)?;
     m.add_function(wrap_pyfunction!(dsp::onset_strength, m)?)?;
     m.add_function(wrap_pyfunction!(dsp::yin, m)?)?;
+    // New DSP functions
+    m.add_function(wrap_pyfunction!(dsp::phase_vocoder, m)?)?;
+    m.add_function(wrap_pyfunction!(dsp::griffinlim, m)?)?;
+    m.add_function(wrap_pyfunction!(dsp::spectral_contrast, m)?)?;
+    m.add_function(wrap_pyfunction!(dsp::poly_features, m)?)?;
+    m.add_function(wrap_pyfunction!(dsp::delta, m)?)?;
+    m.add_function(wrap_pyfunction!(dsp::tempogram, m)?)?;
+    m.add_function(wrap_pyfunction!(dsp::beat_tempo, m)?)?;
+    m.add_function(wrap_pyfunction!(dsp::beat_track_dp, m)?)?;
+    m.add_function(wrap_pyfunction!(dsp::onset_detect, m)?)?;
     // Convert functions
     m.add_function(wrap_pyfunction!(convert::hz_to_mel, m)?)?;
     m.add_function(wrap_pyfunction!(convert::mel_to_hz, m)?)?;

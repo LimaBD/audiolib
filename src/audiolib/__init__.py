@@ -13,7 +13,7 @@ all compiled to machine code via PyO3, all accessible from Python:
     mfccs = audiolib.feature.mfcc(y=y, sr=sr)
 """
 
-from audiolib import effects, feature, util
+from audiolib import beat, effects, feature, onset, pitch, util
 from audiolib.convert import (
     fft_frequencies,
     frames_to_samples,
@@ -41,11 +41,13 @@ from audiolib.core import (
     db_to_power,
     get_duration,
     get_samplerate,
+    griffinlim,
     istft,
     load,
     magphase,
     mu_compress,
     mu_expand,
+    phase_vocoder,
     power_to_db,
     resample,
     stft,
@@ -70,6 +72,8 @@ __all__ = [
     "stft",
     "istft",
     "magphase",
+    "phase_vocoder",
+    "griffinlim",
     # Magnitude scaling
     "amplitude_to_db",
     "db_to_amplitude",
@@ -105,6 +109,9 @@ __all__ = [
     "feature",
     "effects",
     "util",
+    "beat",
+    "pitch",
+    "onset",
     # Exceptions
     "AudiolibError",
     "ParameterError",

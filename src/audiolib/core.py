@@ -50,6 +50,12 @@ from audiolib._core import (
 from audiolib._core import (
     zero_crossings as _zero_crossings,
 )
+from audiolib._core import (
+    phase_vocoder as _phase_vocoder_rust,
+)
+from audiolib._core import (
+    griffinlim as _griffinlim_rust,
+)
 from audiolib.exceptions import ParameterError
 
 __all__ = [
@@ -72,6 +78,8 @@ __all__ = [
     "clicks",
     "tone",
     "chirp",
+    "phase_vocoder",
+    "griffinlim",
 ]
 
 # ─── Audio loading ────────────────────────────────────────────────────────────
@@ -635,3 +643,120 @@ def chirp(
         method=method,
         phi=phi / np.pi * 180,
     ).astype(np.float32)
+
+
+# ─── Phase vocoder ────────────────────────────────────────────────────────────
+
+
+def phase_vocoder(
+    D: np.ndarray,
+    *,
+    rate: float,
+    hop_length: int | None = None,
+) -> np.ndarray:
+    """Phase vocoder. Time-stretch a complex STFT matrix.
+
+    API-compatible with ``librosa.phase_vocoder``.
+
+    Parameters
+    ----------
+    D : np.ndarray [shape=(d, t), dtype=complex]
+        Complex STFT matrix.
+    rate : float
+        Speed-up factor. Values > 1 speed up, < 1 slow down.
+    hop_length : int or None
+        Hop length of the STFT (default ``d - 1``).
+
+    Returns
+    -------
+    D_stretched : np.ndarray [complex, shape=(d, t')]
+        Phase-vocoder output. ``t' = ceil(t / rate)``.
+    """
+    n_bins, n_frames = D.shape
+    if hop_length is None:
+        hop_length = n_bins - 1
+
+    D_c = D.astype(np.complex64)
+    re = D_c.T.real.flatten().tolist()   # row-major: (n_frames, n_bins)
+    im = D_c.T.imag.flatten().tolist()
+
+    re_out, im_out, n_frames_out = _phase_vocoder_rust(
+        re, im, n_bins, n_frames, float(rate), int(hop_length)
+    )
+
+    arr_re = np.array(re_out, dtype=np.float32).reshape(n_frames_out, n_bins)
+    arr_im = np.array(im_out, dtype=np.float32).reshape(n_frames_out, n_bins)
+    D_out = (arr_re + 1j * arr_im).T  # (n_bins, n_frames_out)
+    return D_out.astype(np.complex64)
+
+
+# ─── Griffin-Lim ─────────────────────────────────────────────────────────────
+
+
+def griffinlim(
+    S: np.ndarray,
+    *,
+    n_iter: int = 32,
+    hop_length: int | None = None,
+    win_length: int | None = None,
+    n_fft: int | None = None,
+    window: str = "hann",
+    center: bool = True,
+    dtype=np.float32,
+    length: int | None = None,
+    pad_mode: str = "reflect",
+    momentum: float = 0.99,
+    init: str = "random",
+    random_state=None,
+) -> np.ndarray:
+    """Approximate waveform reconstruction from a magnitude spectrogram.
+
+    Uses the Griffin-Lim algorithm.
+
+    API-compatible with ``librosa.griffinlim``.
+
+    Parameters
+    ----------
+    S : np.ndarray [shape=(1 + n_fft/2, n_frames)]
+        Magnitude spectrogram.
+    n_iter : int
+        Number of Griffin-Lim iterations.
+    hop_length : int or None
+        Hop length (default ``n_fft // 4``).
+    win_length : int or None
+        Window length (default = ``n_fft``).
+    n_fft : int or None
+        FFT size (inferred from ``S.shape[0]`` if not given).
+    center : bool
+        Whether the STFT had ``center=True``.
+    length : int or None
+        Target output length. Pad/trim if given.
+
+    Returns
+    -------
+    y : np.ndarray [shape=(n,)]
+    """
+    n_bins = S.shape[0]
+    n_fft_use = n_fft if n_fft is not None else (n_bins - 1) * 2
+    hop = hop_length if hop_length is not None else n_fft_use // 4
+    win_len = win_length  # None → let Rust decide (uses n_fft_use)
+
+    s_flat = np.abs(S).astype(np.float32).T.flatten().tolist()  # (n_frames, n_bins)
+    n_frames = S.shape[1]
+
+    result = _griffinlim_rust(
+        s_flat,
+        n_bins,
+        n_frames,
+        int(n_iter),
+        int(hop),
+        win_len,
+        bool(center),
+    )
+
+    y = np.array(result, dtype=dtype)
+
+    if length is not None:
+        y = _fix_length(y, length)
+
+    return y

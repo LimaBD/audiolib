@@ -798,6 +798,13 @@ pub fn yin(
         let start = frame_idx * hop;
         let frame = &y[start..start + frame_length];
 
+        // If the frame is essentially silent, mark as unvoiced
+        let frame_energy: f32 = frame.iter().map(|&v| v * v).sum::<f32>() / frame_length as f32;
+        if frame_energy < 1e-10 {
+            f0.push(0.0);
+            continue;
+        }
+
         // Difference function d(tau)
         let mut diff = vec![0.0f32; tau_max + 1];
         for tau in 1..=tau_max {
@@ -847,6 +854,835 @@ pub fn yin(
     }
 
     Ok(f0)
+}
+
+// ─── Phase vocoder ────────────────────────────────────────────────────────────
+
+/// Time-scale a complex STFT matrix using the phase vocoder algorithm.
+///
+/// Parameters
+/// ----------
+/// stft_re    : real parts flat, shape (n_bins, n_frames) row-major
+/// stft_im    : imaginary parts flat, shape (n_bins, n_frames) row-major
+/// n_bins     : number of frequency bins
+/// n_frames   : number of input frames
+/// rate       : time-stretch factor (>1 = speed up, <1 = slow down)
+/// hop_length : hop length used in the original STFT
+///
+/// Returns
+/// -------
+/// (re_out, im_out, n_frames_out)
+#[pyfunction]
+#[pyo3(signature = (stft_re, stft_im, n_bins, n_frames, rate, hop_length=512))]
+pub fn phase_vocoder(
+    stft_re: Vec<f32>,
+    stft_im: Vec<f32>,
+    n_bins: usize,
+    n_frames: usize,
+    rate: f32,
+    hop_length: usize,
+) -> PyResult<(Vec<f32>, Vec<f32>, usize)> {
+    if rate <= 0.0 {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "rate must be positive",
+        ));
+    }
+
+    let n_frames_out = (n_frames as f32 / rate).round() as usize;
+    if n_frames_out == 0 {
+        return Ok((vec![], vec![], 0));
+    }
+
+    let mut re_out = vec![0.0f32; n_bins * n_frames_out];
+    let mut im_out = vec![0.0f32; n_bins * n_frames_out];
+
+    // Phase accumulator per bin (starts from first frame's phase)
+    let mut phase_acc: Vec<f32> = (0..n_bins)
+        .map(|k| {
+            if n_frames > 0 {
+                stft_im[k].atan2(stft_re[k])
+            } else {
+                0.0
+            }
+        })
+        .collect();
+
+    let omega: Vec<f32> = (0..n_bins)
+        .map(|k| 2.0 * PI * k as f32 * hop_length as f32 / (2 * (n_bins - 1)) as f32)
+        .collect();
+
+    for out_t in 0..n_frames_out {
+        // Corresponding input position (float)
+        let in_t_f = out_t as f32 * rate;
+        let in_t0 = in_t_f as usize;
+        let in_t1 = (in_t0 + 1).min(n_frames - 1);
+        let alpha = in_t_f - in_t0 as f32;
+
+        for k in 0..n_bins {
+            // Magnitude: linear interpolation
+            let re0 = stft_re[in_t0 * n_bins + k];
+            let im0 = stft_im[in_t0 * n_bins + k];
+            let re1 = stft_re[in_t1 * n_bins + k];
+            let im1 = stft_im[in_t1 * n_bins + k];
+
+            let mag0 = (re0 * re0 + im0 * im0).sqrt();
+            let mag1 = (re1 * re1 + im1 * im1).sqrt();
+            let mag = (1.0 - alpha) * mag0 + alpha * mag1;
+
+            // Phase advance: expected advance per step
+            if out_t == 0 {
+                let ph = stft_im[k].atan2(stft_re[k]);
+                re_out[k] = mag * ph.cos();
+                im_out[k] = mag * ph.sin();
+            } else {
+                // Phase gradient from previous input frame
+                let ph0 = stft_im[in_t0 * n_bins + k].atan2(stft_re[in_t0 * n_bins + k]);
+                let ph_prev = if in_t0 > 0 {
+                    stft_im[(in_t0 - 1) * n_bins + k].atan2(stft_re[(in_t0 - 1) * n_bins + k])
+                } else {
+                    ph0 - omega[k]
+                };
+                let dp = ph0 - ph_prev - omega[k];
+                // Wrap to [-π, π]
+                let dp_wrapped = dp - 2.0 * PI * (dp / (2.0 * PI)).round();
+                let true_dp = omega[k] + dp_wrapped;
+                phase_acc[k] += true_dp * rate;
+                let ph = phase_acc[k];
+                re_out[out_t * n_bins + k] = mag * ph.cos();
+                im_out[out_t * n_bins + k] = mag * ph.sin();
+            }
+        }
+        if out_t == 0 {
+            // Copy the accumulated first-frame output
+            for k in 0..n_bins {
+                re_out[k] = re_out[k]; // already written above
+                im_out[k] = im_out[k];
+            }
+        }
+    }
+
+    Ok((re_out, im_out, n_frames_out))
+}
+
+// ─── Griffin-Lim ─────────────────────────────────────────────────────────────
+
+/// Reconstruct a signal from a magnitude STFT using the Griffin-Lim algorithm.
+///
+/// Parameters
+/// ----------
+/// S_flat     : magnitude spectrogram, flat Vec<f32>, shape (n_bins, n_frames) row-major
+/// n_bins     : n_fft/2 + 1
+/// n_frames   : number of frames
+/// n_iter     : number of Griffin-Lim iterations (default 32)
+/// hop_length : hop length
+/// win_length : window length (default = n_fft = 2*(n_bins-1))
+/// center     : whether the STFT was centered
+///
+/// Returns reconstructed signal as Vec<f32>
+#[pyfunction]
+#[pyo3(signature = (s_flat, n_bins, n_frames, n_iter=32, hop_length=512, win_length=None, center=true))]
+pub fn griffinlim(
+    s_flat: Vec<f32>,
+    n_bins: usize,
+    n_frames: usize,
+    n_iter: usize,
+    hop_length: usize,
+    win_length: Option<usize>,
+    center: bool,
+) -> Vec<f32> {
+    let n_fft = (n_bins - 1) * 2;
+    let wl = win_length.unwrap_or(n_fft);
+    let window = hann_window(wl);
+
+    // Initialize with random phase
+    let mut phase: Vec<f32> = (0..n_bins * n_frames)
+        .map(|i| {
+            // Deterministic pseudo-random from index
+            let seed = (i * 1664525 + 1013904223) & 0x7FFFFFFF;
+            (seed as f32 / 0x7FFFFFFF as f32) * 2.0 * PI - PI
+        })
+        .collect();
+
+    let mut planner = FftPlanner::<f32>::new();
+    let ifft = planner.plan_fft_inverse(n_fft);
+    let fft = planner.plan_fft_forward(n_fft);
+
+    let mut signal = vec![0.0f32; if n_frames == 0 { 0 } else { (n_frames - 1) * hop_length + n_fft }];
+
+    for _iter in 0..n_iter {
+        // Build complex STFT from magnitude + current phase
+        // ISTFT → signal
+        let n_sig = if n_frames == 0 { 0 } else { (n_frames - 1) * hop_length + n_fft };
+        signal = vec![0.0f32; n_sig];
+        let mut win_sum = vec![0.0f32; n_sig];
+
+        for t in 0..n_frames {
+            let mut buf: Vec<Complex<f32>> = (0..n_bins)
+                .map(|k| {
+                    let mag = s_flat[k * n_frames + t];
+                    let ph = phase[k * n_frames + t];
+                    Complex::new(mag * ph.cos(), mag * ph.sin())
+                })
+                .collect();
+
+            // Mirror for real-valued IFFT
+            for k in 1..(n_fft - n_bins + 1) {
+                let mirror = Complex::new(
+                    buf[n_bins - 1 - k].re,
+                    -buf[n_bins - 1 - k].im,
+                );
+                buf.push(mirror);
+            }
+            buf.resize(n_fft, Complex::new(0.0, 0.0));
+
+            ifft.process(&mut buf);
+
+            let start = t * hop_length;
+            for i in 0..n_fft {
+                if start + i < n_sig {
+                    let w = if i < wl { window[i] } else { 0.0 };
+                    signal[start + i] += buf[i].re * w / n_fft as f32;
+                    win_sum[start + i] += w * w;
+                }
+            }
+        }
+
+        // Normalize by window sum
+        for i in 0..n_sig {
+            if win_sum[i] > 1e-8 {
+                signal[i] /= win_sum[i];
+            }
+        }
+
+        // STFT of current signal to update phases
+        let analysis_signal: Vec<f32> = if center {
+            let pad = n_fft / 2;
+            let mut padded = vec![0.0f32; pad + signal.len() + pad];
+            padded[pad..pad + signal.len()].copy_from_slice(&signal);
+            padded
+        } else {
+            signal.clone()
+        };
+
+        for t in 0..n_frames {
+            let start = t * hop_length;
+            let mut buf: Vec<Complex<f32>> = (0..n_fft)
+                .map(|i| {
+                    let s = if start + i < analysis_signal.len() {
+                        analysis_signal[start + i]
+                    } else {
+                        0.0
+                    };
+                    let w = if i < wl { window[i] } else { 0.0 };
+                    Complex::new(s * w, 0.0)
+                })
+                .collect();
+            fft.process(&mut buf);
+            for k in 0..n_bins {
+                phase[k * n_frames + t] = buf[k].im.atan2(buf[k].re);
+            }
+        }
+    }
+
+    // Trim center padding
+    if center && !signal.is_empty() {
+        let pad = n_fft / 2;
+        if signal.len() > 2 * pad {
+            return signal[pad..signal.len() - pad].to_vec();
+        }
+    }
+
+    signal
+}
+
+// ─── Spectral contrast ────────────────────────────────────────────────────────
+
+/// Compute spectral contrast.
+///
+/// For each sub-band, the contrast = mean of top-q peaks minus mean of bottom-q valleys.
+/// Returns flat Vec<f32>, shape (n_bands+1, n_frames), row-major.
+#[pyfunction]
+#[pyo3(signature = (stft_mag, sr, n_fft, n_frames, n_bins, n_bands=6, fmin=200.0, quantile=0.02, linear=false))]
+pub fn spectral_contrast(
+    stft_mag: Vec<f32>,
+    sr: f32,
+    n_fft: usize,
+    n_frames: usize,
+    n_bins: usize,
+    n_bands: usize,
+    fmin: f32,
+    quantile: f32,
+    linear: bool,
+) -> Vec<f32> {
+    let n_rows = n_bands + 1;
+    let mut out = vec![0.0f32; n_rows * n_frames];
+
+    // Frequency of each FFT bin
+    let fft_freqs: Vec<f32> = (0..n_bins).map(|k| k as f32 * sr / n_fft as f32).collect();
+
+    // Sub-band edges (octave-spaced starting from fmin)
+    let mut band_edges: Vec<f32> = (0..=n_bands)
+        .map(|i| fmin * 2.0f32.powi(i as i32))
+        .collect();
+    // Last edge = Nyquist
+    band_edges.push(sr / 2.0);
+
+    for t in 0..n_frames {
+        let frame = &stft_mag[t * n_bins..(t + 1) * n_bins];
+        for band in 0..=n_bands {
+            let flo = if band == 0 { 0.0 } else { band_edges[band - 1] };
+            let fhi = band_edges[band].min(sr / 2.0);
+
+            // Collect bin magnitudes (or energies) in this band
+            let band_mags: Vec<f32> = fft_freqs
+                .iter()
+                .enumerate()
+                .filter(|(_, &f)| f >= flo && f < fhi)
+                .map(|(k, _)| if linear { frame[k] } else { (frame[k] as f64 + 1e-10).ln() as f32 })
+                .collect();
+
+            if band_mags.is_empty() {
+                out[band * n_frames + t] = 0.0;
+                continue;
+            }
+
+            let n = band_mags.len();
+            let n_q = ((n as f32 * quantile).ceil() as usize).max(1).min(n);
+
+            let mut sorted = band_mags.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+            let valley: f32 = sorted[..n_q].iter().sum::<f32>() / n_q as f32;
+            let peak: f32 = sorted[n - n_q..].iter().sum::<f32>() / n_q as f32;
+
+            out[band * n_frames + t] = peak - valley;
+        }
+    }
+
+    out
+}
+
+// ─── Polynomial features ──────────────────────────────────────────────────────
+
+/// Fit a polynomial of `order` to each spectral column.
+/// Returns flat Vec<f32>, shape (order+1, n_frames) row-major.
+/// Coefficients are from highest to lowest degree (like numpy.polyfit).
+#[pyfunction]
+#[pyo3(signature = (stft_mag, sr, n_fft, n_frames, n_bins, order=1))]
+pub fn poly_features(
+    stft_mag: Vec<f32>,
+    sr: f32,
+    n_fft: usize,
+    n_frames: usize,
+    n_bins: usize,
+    order: usize,
+) -> Vec<f32> {
+    let fft_freqs: Vec<f64> = (0..n_bins).map(|k| k as f64 * sr as f64 / n_fft as f64).collect();
+    let n_coeffs = order + 1;
+    let mut out = vec![0.0f32; n_coeffs * n_frames];
+
+    // Precompute Vandermonde-like system via least squares (normal equations)
+    // For each frame, solve: V * c = y  where V[i,j] = freq[i]^j
+    // Build VtV and Vty, solve by Gaussian elimination
+    let n = n_bins;
+    let m = n_coeffs;
+
+    // Precompute powers of frequencies
+    let mut freq_pows: Vec<Vec<f64>> = vec![vec![0.0; n]; m];
+    for i in 0..n {
+        let f = fft_freqs[i];
+        let mut p = 1.0f64;
+        for j in 0..m {
+            freq_pows[j][i] = p;
+            p *= f;
+        }
+    }
+
+    // VtV is (m × m), symmetric
+    let mut vtv = vec![0.0f64; m * m];
+    for a in 0..m {
+        for b in 0..=a {
+            let s: f64 = (0..n).map(|i| freq_pows[a][i] * freq_pows[b][i]).sum();
+            vtv[a * m + b] = s;
+            vtv[b * m + a] = s;
+        }
+    }
+
+    for t in 0..n_frames {
+        let frame = &stft_mag[t * n_bins..(t + 1) * n_bins];
+
+        // Vty is (m,)
+        let mut vty = vec![0.0f64; m];
+        for a in 0..m {
+            vty[a] = (0..n).map(|i| freq_pows[a][i] * frame[i] as f64).sum();
+        }
+
+        // Solve (VtV) * c = vty via Gaussian elimination with partial pivoting
+        let coeffs = solve_linear(vtv.clone(), vty, m);
+
+        // Coefficients from highest degree to lowest (like numpy.polyfit)
+        for j in 0..m {
+            out[(m - 1 - j) * n_frames + t] = coeffs[j] as f32;
+        }
+    }
+
+    out
+}
+
+/// Simple Gaussian elimination with partial pivoting for small systems
+fn solve_linear(mut a: Vec<f64>, mut b: Vec<f64>, n: usize) -> Vec<f64> {
+    // Augmented matrix: [a | b]
+    for col in 0..n {
+        // Find pivot
+        let mut max_row = col;
+        let mut max_val = a[col * n + col].abs();
+        for row in col + 1..n {
+            if a[row * n + col].abs() > max_val {
+                max_val = a[row * n + col].abs();
+                max_row = row;
+            }
+        }
+        // Swap rows
+        if max_row != col {
+            for k in 0..n {
+                a.swap(col * n + k, max_row * n + k);
+            }
+            b.swap(col, max_row);
+        }
+        let pivot = a[col * n + col];
+        if pivot.abs() < 1e-12 {
+            continue;
+        }
+        for row in col + 1..n {
+            let factor = a[row * n + col] / pivot;
+            for k in col..n {
+                let v = a[col * n + k] * factor;
+                a[row * n + k] -= v;
+            }
+            b[row] -= b[col] * factor;
+        }
+    }
+    // Back substitution
+    let mut x = vec![0.0f64; n];
+    for row in (0..n).rev() {
+        if a[row * n + row].abs() < 1e-12 {
+            x[row] = 0.0;
+            continue;
+        }
+        let mut s = b[row];
+        for k in row + 1..n {
+            s -= a[row * n + k] * x[k];
+        }
+        x[row] = s / a[row * n + row];
+    }
+    x
+}
+
+// ─── Delta features ───────────────────────────────────────────────────────────
+
+/// Compute local estimate of the derivative of data along axis=-1.
+///
+/// Uses a linear regression approach over a window of `width` frames.
+/// Parameters
+/// ----------
+/// data_flat  : flat Vec<f32>, shape (n_features, n_frames) row-major
+/// n_features : number of feature rows
+/// n_frames   : number of frames (time axis)
+/// width      : number of frames used for local regression (must be odd, ≥3)
+/// order      : order of difference (1=velocity, 2=acceleration)
+///
+/// Returns flat Vec<f32>, same shape as data.
+#[pyfunction]
+#[pyo3(signature = (data_flat, n_features, n_frames, width=9, order=1))]
+pub fn delta(
+    data_flat: Vec<f32>,
+    n_features: usize,
+    n_frames: usize,
+    width: usize,
+    order: usize,
+) -> Vec<f32> {
+    // Minimum width = 3, must be odd
+    let w = width.max(3);
+    let half = (w / 2) as isize;
+
+    // Denominator: sum of squared offsets
+    let denom: f32 = (1..=half as usize).map(|t| (t * t) as f32).sum::<f32>() * 2.0;
+    let denom = if denom < 1e-8 { 1.0 } else { denom };
+
+    let compute_single_delta = |input: &[f32]| -> Vec<f32> {
+        let mut out = vec![0.0f32; n_features * n_frames];
+        for feat in 0..n_features {
+            for t in 0..n_frames as isize {
+                let mut acc = 0.0f32;
+                for offset in -half..=half {
+                    if offset == 0 { continue; }
+                    let idx = (t + offset).max(0).min(n_frames as isize - 1) as usize;
+                    acc += offset as f32 * input[feat * n_frames + idx];
+                }
+                out[feat * n_frames + t as usize] = acc / denom;
+            }
+        }
+        out
+    };
+
+    let first = compute_single_delta(&data_flat);
+    if order <= 1 {
+        return first;
+    }
+    // Recursively compute higher-order deltas
+    compute_single_delta(&first)
+}
+
+// ─── Tempogram ────────────────────────────────────────────────────────────────
+
+/// Compute an autocorrelation tempogram from an onset strength envelope.
+///
+/// Parameters
+/// ----------
+/// onset_env  : onset strength envelope, Vec<f32> of length n_onset_frames
+/// sr         : sampling rate
+/// hop_length : hop length used to compute onset_env
+/// win_length : number of frames per tempogram frame (default 384)
+/// center     : whether to pad the onset_env at both ends
+///
+/// Returns (flat Vec<f32>, n_tempo_bins, n_tg_frames)
+/// The output shape is (win_length, n_tg_frames).
+#[pyfunction]
+#[pyo3(signature = (onset_env, sr, hop_length=512, win_length=384, center=true))]
+pub fn tempogram(
+    onset_env: Vec<f32>,
+    sr: f32,
+    hop_length: usize,
+    win_length: usize,
+    center: bool,
+) -> (Vec<f32>, usize, usize) {
+    let _ = sr;
+    let n_onset = onset_env.len();
+    if n_onset == 0 || win_length == 0 {
+        return (vec![], 0, 0);
+    }
+
+    // Window function for tempogram frames
+    let window = hann_window(win_length);
+    let _ = hop_length;
+
+    // Pad the onset envelope
+    let padded: Vec<f32> = if center {
+        let pad = win_length / 2;
+        let mut p = vec![0.0f32; pad + n_onset + pad];
+        p[pad..pad + n_onset].copy_from_slice(&onset_env);
+        p
+    } else {
+        onset_env.clone()
+    };
+
+    let n_padded = padded.len();
+    let tg_hop = 1;
+    let n_tg_frames = if n_padded >= win_length {
+        (n_padded - win_length) / tg_hop + 1
+    } else {
+        0
+    };
+
+    if n_tg_frames == 0 {
+        return (vec![], win_length, 0);
+    }
+
+    // For each tempogram frame, compute autocorrelation of the windowed onset envelope
+    let mut out = vec![0.0f32; win_length * n_tg_frames];
+
+    for t in 0..n_tg_frames {
+        let start = t * tg_hop;
+        let frame: Vec<f32> = (0..win_length)
+            .map(|i| padded[start + i] * window[i])
+            .collect();
+
+        // Autocorrelation via brute force for each lag
+        let mean: f32 = frame.iter().sum::<f32>() / win_length as f32;
+        let frame_centered: Vec<f32> = frame.iter().map(|&v| v - mean).collect();
+        let var: f32 = frame_centered.iter().map(|&v| v * v).sum::<f32>();
+
+        for lag in 0..win_length {
+            let mut corr = 0.0f32;
+            for i in 0..(win_length - lag) {
+                corr += frame_centered[i] * frame_centered[i + lag];
+            }
+            out[lag * n_tg_frames + t] = if var > 1e-8 { corr / var } else { 0.0 };
+        }
+    }
+
+    (out, win_length, n_tg_frames)
+}
+
+// ─── Beat tracking ────────────────────────────────────────────────────────────
+
+/// Estimate the global tempo from an onset strength envelope.
+///
+/// Uses an autocorrelation-based approach in the lag domain, then finds the
+/// best consistent lag near `start_bpm`.
+///
+/// Returns estimated BPM as f32.
+#[pyfunction]
+#[pyo3(signature = (onset_env, sr, hop_length=512, start_bpm=120.0, max_tempo=320.0))]
+pub fn beat_tempo(
+    onset_env: Vec<f32>,
+    sr: f32,
+    hop_length: usize,
+    start_bpm: f32,
+    max_tempo: f32,
+) -> f32 {
+    if onset_env.is_empty() {
+        return start_bpm;
+    }
+
+    let n = onset_env.len();
+    let frame_rate = sr / hop_length as f32; // frames per second
+
+    // Lag range in frames corresponding to BPM range [10, max_tempo]
+    let lag_min = (60.0 * frame_rate / max_tempo).floor() as usize;
+    let lag_max = (60.0 * frame_rate / 10.0_f32).ceil() as usize;
+    let lag_max = lag_max.min(n - 1);
+
+    if lag_min >= lag_max {
+        return start_bpm;
+    }
+
+    // Compute autocorrelation of onset envelope via FFT
+    let fft_size = next_power_of_two(2 * n - 1);
+    let mut planner = FftPlanner::<f32>::new();
+    let fft = planner.plan_fft_forward(fft_size);
+    let ifft = planner.plan_fft_inverse(fft_size);
+
+    let mut buf: Vec<Complex<f32>> = onset_env
+        .iter()
+        .map(|&x| Complex::new(x, 0.0))
+        .collect();
+    buf.resize(fft_size, Complex::new(0.0, 0.0));
+    fft.process(&mut buf);
+    buf.iter_mut().for_each(|c| {
+        let p = c.re * c.re + c.im * c.im;
+        *c = Complex::new(p, 0.0);
+    });
+    ifft.process(&mut buf);
+    let scale = fft_size as f32;
+    let ac: Vec<f32> = buf[..n].iter().map(|c| c.re / scale).collect();
+
+    // Gaussian prior centred at start_bpm
+    let start_lag = 60.0 * frame_rate / start_bpm;
+    let std_bpm = 0.3 * start_bpm;
+    let std_lag = 60.0 * frame_rate / start_bpm.powi(2) * std_bpm * start_bpm;
+
+    let mut best_score = f32::NEG_INFINITY;
+    let mut best_lag = lag_min;
+
+    for lag in lag_min..=lag_max {
+        let ac_val = if lag < ac.len() { ac[lag] } else { 0.0 };
+        let prior = -0.5 * ((lag as f32 - start_lag) / std_lag.max(1.0)).powi(2);
+        let score = ac_val * prior.exp();
+        if score > best_score {
+            best_score = score;
+            best_lag = lag;
+        }
+    }
+
+    if best_lag == 0 {
+        return start_bpm;
+    }
+
+    60.0 * frame_rate / best_lag as f32
+}
+
+/// Beat tracking using dynamic programming on the onset strength envelope.
+///
+/// Returns Vec<u32> of beat frame indices.
+#[pyfunction]
+#[pyo3(signature = (onset_env, tempo, sr, hop_length=512, tightness=100.0, trim=true))]
+pub fn beat_track_dp(
+    onset_env: Vec<f32>,
+    tempo: f32,
+    sr: f32,
+    hop_length: usize,
+    tightness: f32,
+    trim: bool,
+) -> Vec<u32> {
+    if onset_env.is_empty() || tempo <= 0.0 {
+        return vec![];
+    }
+
+    let n = onset_env.len();
+    let frame_rate = sr / hop_length as f32;
+    let beat_period = (60.0 * frame_rate / tempo).round() as usize;
+
+    if beat_period == 0 {
+        return vec![];
+    }
+
+    // Normalize onset envelope to [0, 1]
+    let max_val = onset_env.iter().cloned().fold(0.0f32, f32::max);
+    let odf: Vec<f32> = if max_val > 1e-8 {
+        onset_env.iter().map(|&v| v / max_val).collect()
+    } else {
+        onset_env.clone()
+    };
+
+    // Dynamic programming score and back-pointer
+    let mut score = vec![f32::NEG_INFINITY; n];
+    let mut backlink = vec![0i32; n];
+
+    score[0] = odf[0];
+    backlink[0] = -1;
+
+    for t in 1..n {
+        // Look back in range [beat_period/2, 2*beat_period]
+        let lo = if t > beat_period * 2 { t - beat_period * 2 } else { 0 };
+        let hi = if t > beat_period / 2 { t - beat_period / 2 } else { 0 };
+
+        let mut best_score = f32::NEG_INFINITY;
+        let mut best_prev = lo as i32;
+
+        for prev in lo..=hi {
+            if score[prev] == f32::NEG_INFINITY {
+                continue;
+            }
+            let delta = t as f32 - prev as f32;
+            let penalty = -tightness * (((delta / beat_period as f32).ln()).powi(2));
+            let s = score[prev] + penalty;
+            if s > best_score {
+                best_score = s;
+                best_prev = prev as i32;
+            }
+        }
+
+        score[t] = best_score + odf[t];
+        backlink[t] = best_prev;
+    }
+
+    // Find the best final beat
+    let mut best_t = 0;
+    let mut best_s = f32::NEG_INFINITY;
+    for t in 0..n {
+        if score[t] > best_s {
+            best_s = score[t];
+            best_t = t;
+        }
+    }
+
+    // Trace back to find all beat frames
+    let mut beats = Vec::new();
+    let mut t = best_t as i32;
+    while t >= 0 {
+        beats.push(t as u32);
+        let prev = backlink[t as usize];
+        if prev == t || prev < 0 {
+            break;
+        }
+        t = prev;
+    }
+    beats.reverse();
+
+    // Optionally trim leading/trailing beats below median onset strength
+    if trim && !beats.is_empty() {
+        let smooth_len = beat_period / 2;
+        let threshold = {
+            let vals: Vec<f32> = beats
+                .iter()
+                .map(|&b| {
+                    let b = b as usize;
+                    let lo = if b > smooth_len { b - smooth_len } else { 0 };
+                    let hi = (b + smooth_len).min(n - 1);
+                    odf[lo..=hi].iter().cloned().fold(0.0f32, f32::max)
+                })
+                .collect();
+            let mut sorted = vals.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            sorted[sorted.len() / 4] // 25th percentile
+        };
+
+        let first_valid = beats
+            .iter()
+            .position(|&b| odf[b as usize] >= threshold)
+            .unwrap_or(0);
+        let last_valid = beats
+            .iter()
+            .rposition(|&b| odf[b as usize] >= threshold)
+            .unwrap_or(beats.len() - 1);
+
+        beats = beats[first_valid..=last_valid].to_vec();
+    }
+
+    beats
+}
+
+// ─── Onset detection ──────────────────────────────────────────────────────────
+
+/// Detect onsets in an onset strength envelope using peak picking.
+///
+/// Parameters
+/// ----------
+/// onset_env  : onset strength envelope
+/// sr         : sample rate
+/// hop_length : hop length used to compute onset_env
+/// delta      : minimum height above local mean to be considered an onset (default 0.07)
+/// wait       : number of frames to wait after each onset (default 30)
+///
+/// Returns Vec<u32> of onset frame indices.
+#[pyfunction]
+#[pyo3(signature = (onset_env, sr, hop_length=512, delta=0.07, wait=30))]
+pub fn onset_detect(
+    onset_env: Vec<f32>,
+    sr: f32,
+    hop_length: usize,
+    delta: f32,
+    wait: usize,
+) -> Vec<u32> {
+    let _ = sr;
+    let _ = hop_length;
+
+    let n = onset_env.len();
+    if n < 2 {
+        return vec![];
+    }
+
+    // Normalize to [0, 1]
+    let max_val = onset_env.iter().cloned().fold(0.0f32, f32::max);
+    let odf: Vec<f32> = if max_val > 1e-8 {
+        onset_env.iter().map(|&v| v / max_val).collect()
+    } else {
+        return vec![];
+    };
+
+    // Compute local mean over a window
+    let mean_window = (wait * 2).min(n);
+    let local_mean: Vec<f32> = (0..n)
+        .map(|i| {
+            let lo = if i > mean_window / 2 { i - mean_window / 2 } else { 0 };
+            let hi = (i + mean_window / 2).min(n - 1);
+            odf[lo..=hi].iter().sum::<f32>() / (hi - lo + 1) as f32
+        })
+        .collect();
+
+    let mut onsets = Vec::new();
+    let mut last_onset: Option<usize> = None;
+
+    for i in 1..(n - 1) {
+        // Peak picking: local maximum above threshold
+        if odf[i] > odf[i - 1]
+            && odf[i] >= odf[i + 1]
+            && odf[i] > local_mean[i] + delta
+        {
+            if let Some(last) = last_onset {
+                if i - last >= wait {
+                    onsets.push(i as u32);
+                    last_onset = Some(i);
+                }
+            } else {
+                onsets.push(i as u32);
+                last_onset = Some(i);
+            }
+        }
+    }
+
+    onsets
 }
 
 // Suppress unused import warning: PI64 is available for future use

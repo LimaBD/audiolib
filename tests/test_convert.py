@@ -215,3 +215,52 @@ class TestMelFrequencies:
         freqs = mel_frequencies(n_mels=128, fmin=fmin, fmax=fmax)
         assert freqs[0] >= fmin - 1.0
         assert freqs[-1] <= fmax + 1.0
+
+    def test_htk_formula(self):
+        from audiolib.convert import mel_frequencies
+        freqs = mel_frequencies(n_mels=40, htk=True)
+        assert len(freqs) == 40
+        assert (np.diff(freqs) > 0).all()
+
+
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+class TestEdgeCasesConvert:
+    def test_hz_to_mel_large_value(self):
+        from audiolib.convert import hz_to_mel
+        # Should not raise for large Hz
+        result = hz_to_mel(20000.0)
+        assert np.isfinite(result)
+
+    def test_mel_to_hz_zero(self):
+        from audiolib.convert import mel_to_hz
+        result = mel_to_hz(0.0)
+        assert result == pytest.approx(0.0, abs=1.0)
+
+    def test_hz_to_midi_array_consistent(self):
+        from audiolib.convert import hz_to_midi
+        result = hz_to_midi(np.array([440.0, 880.0, 220.0]))
+        expected = np.array([69.0, 81.0, 57.0])
+        np.testing.assert_allclose(result, expected, atol=0.1)
+
+    def test_frames_to_time_with_n_fft(self):
+        from audiolib.convert import frames_to_time
+        # With n_fft offset
+        t = frames_to_time(0, hop_length=512, sr=22050, n_fft=2048)
+        assert t == pytest.approx(2048 / 2 / 22050, abs=1e-6)
+
+    def test_time_to_samples_array(self):
+        from audiolib.convert import time_to_samples
+        times = np.array([0.0, 0.5, 1.0])
+        result = time_to_samples(times, sr=22050)
+        expected = np.array([0, 11025, 22050])
+        np.testing.assert_array_equal(result, expected)
+
+    def test_samples_to_time_array(self):
+        from audiolib.convert import samples_to_time
+        samples = np.array([0, 22050, 44100])
+        result = samples_to_time(samples, sr=22050)
+        expected = np.array([0.0, 1.0, 2.0])
+        np.testing.assert_allclose(result, expected, atol=1e-6)
