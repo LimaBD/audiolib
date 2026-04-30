@@ -4,10 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "audiolib"
-version = "0.1.0"
+version = "1.0.0"
 description = "Blazing-fast audio analysis and DSP for Python — powered by a Rust engine under the hood"
 readme = "README.md"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
+license-files = ["LICENSE"]
 requires-python = ">=3.8"
 authors = [
     { name = "Bruno Lima", email = "contact@brunolima.dev" },
