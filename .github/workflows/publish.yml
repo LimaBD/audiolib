@@ -65,7 +65,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
-          args: --release --out dist --locked --find-interpreter
+          args: --release --out dist --locked --interpreter python3.10 python3.11 python3.12 python3.13
           sccache: "true"
 
       - name: Build wheels (macOS / Windows)
