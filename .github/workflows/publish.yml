@@ -136,12 +136,12 @@ jobs:
           path: dist/
           merge-multiple: true
 
-      - name: Install wheel
-        shell: bash
-        run: pip install audiolib --find-links dist/ --no-index
-
       - name: Install test deps
         run: pip install pytest numpy soundfile scipy
+
+      - name: Install wheel
+        shell: bash
+        run: pip install audiolib --find-links dist/ --no-deps
 
       - name: Run smoke tests
         run: pytest tests/ -v --ignore=tests/benchmark.py --ignore=tests/test_compat.py -x
