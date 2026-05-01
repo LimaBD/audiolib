@@ -1542,16 +1542,8 @@ pub fn beat_track_dp(
 
     for t in 1..n {
         // Look back in range [beat_period/2, 2*beat_period]
-        let lo = if t > beat_period * 2 {
-            t - beat_period * 2
-        } else {
-            0
-        };
-        let hi = if t > beat_period / 2 {
-            t - beat_period / 2
-        } else {
-            0
-        };
+        let lo = t.saturating_sub(beat_period * 2);
+        let hi = t.saturating_sub(beat_period / 2);
 
         let mut best_score = f32::NEG_INFINITY;
         let mut best_prev = lo as i32;
@@ -1671,11 +1663,7 @@ pub fn onset_detect(
     let mean_window = (wait * 2).min(n);
     let local_mean: Vec<f32> = (0..n)
         .map(|i| {
-            let lo = if i > mean_window / 2 {
-                i - mean_window / 2
-            } else {
-                0
-            };
+            let lo = i.saturating_sub(mean_window / 2);
             let hi = (i + mean_window / 2).min(n - 1);
             odf[lo..=hi].iter().sum::<f32>() / (hi - lo + 1) as f32
         })
